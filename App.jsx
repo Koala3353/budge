@@ -26,7 +26,7 @@ const DEMO_MODE = false;
 export default function App() {
   const [view, setView] = useState("add");
   const [hash, setHash] = useState(null);
-  const [status, setStatus] = useState("loading"); // loading | ready | error
+  const [status, setStatus] = useState("loading"); // loading | ready | error | auth
   const [sync, setSync] = useState("idle"); // idle | saving | saved | error
 
   const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
@@ -82,10 +82,10 @@ export default function App() {
       setStatus("ready");
       return;
     }
-    let h = getStoredHash();
+    const h = getStoredHash();
     if (!h) {
-      h = genHash();
-      storeHash(h);
+      setStatus("auth");
+      return;
     }
     setHash(h);
     hydrate(h);
@@ -220,6 +220,10 @@ export default function App() {
   }
 
   // --- Loading / error gates ---
+  if (status === "auth") {
+    return <AuthGate onUseAccount={useAccount} onNewAccount={newAccount} />;
+  }
+
   if (status !== "ready") {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-950 px-6 text-center">
@@ -298,6 +302,62 @@ export default function App() {
       </div>
 
       <BottomNav view={view} onChange={setView} />
+    </div>
+  );
+}
+
+function AuthGate({ onUseAccount, onNewAccount }) {
+  const [hashInput, setHashInput] = useState("");
+  const canSubmit = hashInput.trim().length > 0;
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-6 py-10 text-gray-900 dark:bg-gray-950 dark:text-gray-50">
+      <div className="w-full max-w-md space-y-6">
+        <div className="space-y-2 text-center">
+          <p className="text-sm font-semibold uppercase tracking-wide text-matcha">Weekly Budget</p>
+          <h1 className="text-2xl font-bold tracking-tight">Welcome back</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Enter an existing account key or create a new one to start tracking.
+          </p>
+        </div>
+
+        <div className="space-y-3">
+          <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+            Account key
+          </label>
+          <input
+            autoFocus
+            value={hashInput}
+            onChange={(e) => setHashInput(e.target.value)}
+            placeholder="paste account key"
+            className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 font-mono text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-matcha/40 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-50"
+          />
+          <button
+            disabled={!canSubmit}
+            onClick={() => onUseAccount(hashInput)}
+            className={`w-full rounded-2xl py-3 text-base font-semibold transition ${
+              canSubmit
+                ? "bg-matcha text-white active:scale-[0.99]"
+                : "cursor-not-allowed bg-gray-200 text-gray-400 dark:bg-gray-800"
+            }`}
+          >
+            Use existing key
+          </button>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <span className="h-px flex-1 bg-gray-200 dark:bg-gray-800" />
+          <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">or</span>
+          <span className="h-px flex-1 bg-gray-200 dark:bg-gray-800" />
+        </div>
+
+        <button
+          onClick={() => onNewAccount()}
+          className="w-full rounded-2xl border border-gray-200 bg-white py-3 text-base font-semibold text-gray-900 active:scale-[0.99] dark:border-gray-700 dark:bg-gray-900 dark:text-gray-50"
+        >
+          Create new account
+        </button>
+      </div>
     </div>
   );
 }
