@@ -2,8 +2,8 @@ import { useState } from "react";
 import Modal from "./Modal.jsx";
 
 const COLOR_PRESETS = [
-  "#F2851F", "#3A7CA5", "#8B5E34", "#9B5DE5", "#F15BB5",
-  "#5B8C5A", "#E5484D", "#F5A623", "#00B5AD", "#888888",
+  "#F97316", "#3B82F6", "#8B5E34", "#8B5CF6", "#EC4899",
+  "#5B8C5A", "#EF4444", "#F59E0B", "#14B8A6", "#6B7280",
 ];
 
 /**
@@ -34,7 +34,7 @@ export default function CategoryEditor({ category, canDelete, onSave, onDelete, 
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Groceries"
-              className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-neutral-900 px-3 py-2.5 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-matcha/40"
+              className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2.5 text-gray-900 dark:text-gray-50 focus:outline-none focus:ring-2 focus:ring-matcha/40"
             />
           </div>
         </div>
@@ -47,7 +47,7 @@ export default function CategoryEditor({ category, canDelete, onSave, onDelete, 
             value={icon}
             onChange={(e) => setIcon([...e.target.value].slice(-2).join(""))}
             placeholder="🍜"
-            className="w-24 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-neutral-900 px-3 py-2.5 text-center text-2xl focus:outline-none focus:ring-2 focus:ring-matcha/40"
+            className="w-24 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2.5 text-center text-2xl focus:outline-none focus:ring-2 focus:ring-matcha/40"
           />
         </div>
 
@@ -86,7 +86,7 @@ export default function CategoryEditor({ category, canDelete, onSave, onDelete, 
               onClick={() => onDelete(category.id)}
               className={`w-full rounded-2xl py-3.5 text-base font-semibold transition ${
                 canDelete
-                  ? "bg-over/10 text-over active:scale-[0.99]"
+                  ? "bg-red-500/10 text-red-500 active:scale-[0.99]"
                   : "bg-gray-100 dark:bg-white/5 text-gray-400 cursor-not-allowed"
               }`}
             >

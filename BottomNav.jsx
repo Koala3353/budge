@@ -11,8 +11,8 @@ const TABS = [
 export default function BottomNav({ view, onChange }) {
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-20 border-t border-gray-200 dark:border-white/10
-                 bg-white/90 dark:bg-neutral-900/90 backdrop-blur
+      className="fixed inset-x-0 bottom-0 z-20 border-t border-gray-200 dark:border-gray-800
+                 bg-white/80 dark:bg-gray-950/80 backdrop-blur-md
                  pb-[env(safe-area-inset-bottom)]"
     >
       <div className="mx-auto flex max-w-md items-stretch justify-around">

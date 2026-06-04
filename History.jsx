@@ -2,7 +2,7 @@ import { useState } from "react";
 import { formatMoney, formatTime, dayLabel } from "./budget.js";
 import EditSheet from "./EditSheet.jsx";
 
-/** Group transactions (sorted newest first) into day buckets keyed by label. */
+/** Group transactions (newest first) into day buckets keyed by label. */
 function groupByDay(transactions) {
   const sorted = [...transactions].sort((a, b) => b.ts - a.ts);
   const groups = [];
@@ -25,37 +25,42 @@ export default function History({ categories, transactions, settings, onEdit, on
   const groups = groupByDay(transactions);
 
   return (
-    <div className="px-4 pt-5 pb-4">
-      <h1 className="mb-4 text-2xl font-bold text-gray-900 dark:text-white">History</h1>
+    <div className="min-h-full bg-gray-50 px-4 pt-5 pb-4 dark:bg-gray-950">
+      <h1 className="mb-4 text-2xl font-bold tracking-tight text-gray-900 dark:text-gray-50">
+        History
+      </h1>
 
       {transactions.length === 0 ? (
-        <div className="rounded-2xl bg-white dark:bg-neutral-800 p-8 text-center text-gray-500 dark:text-gray-400 shadow-sm">
+        <div className="rounded-3xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500 shadow-sm dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400">
           No transactions yet. Logged expenses will appear here.
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-5">
           {groups.map((g) => (
             <section key={g.label}>
-              <h2 className="mb-2 px-1 text-sm font-semibold text-gray-500 dark:text-gray-400">
+              {/* Sticky date header */}
+              <h2 className="sticky top-0 z-10 -mx-4 mb-2 bg-gray-50/80 px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500 backdrop-blur-md dark:bg-gray-950/80 dark:text-gray-400">
                 {g.label}
               </h2>
-              <div className="overflow-hidden rounded-2xl bg-white dark:bg-neutral-800 shadow-sm divide-y divide-gray-100 dark:divide-white/5">
-                {g.items.map((t) => {
+              <div className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                {g.items.map((t, i) => {
                   const c = catById(t.categoryId);
                   return (
                     <button
                       key={t.id}
                       onClick={() => setSelected(t)}
-                      className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-gray-50 dark:active:bg-neutral-700/50 transition"
+                      className={`flex w-full items-center gap-3 px-4 py-3 text-left transition active:bg-gray-50 dark:active:bg-gray-800/50 ${
+                        i > 0 ? "border-t border-gray-100 dark:border-gray-800" : ""
+                      }`}
                     >
                       <span
-                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xl"
+                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-xl"
                         style={{ backgroundColor: (c?.color || "#888") + "22" }}
                       >
-                        {c?.icon || "❔"}
+                        {c?.icon || "💸"}
                       </span>
                       <div className="min-w-0 flex-1">
-                        <div className="font-semibold text-gray-900 dark:text-white">
+                        <div className="font-semibold text-gray-900 dark:text-gray-50">
                           {c?.name || "Uncategorized"}
                         </div>
                         {t.note && (
@@ -65,7 +70,7 @@ export default function History({ categories, transactions, settings, onEdit, on
                         )}
                       </div>
                       <div className="text-right">
-                        <div className="font-semibold text-gray-900 dark:text-white tabular-nums">
+                        <div className="font-mono font-semibold tabular-nums text-gray-900 dark:text-gray-50">
                           -{formatMoney(t.amount, symbol)}
                         </div>
                         <div className="text-xs text-gray-400">{formatTime(t.ts)}</div>

@@ -1,30 +1,23 @@
 import { formatMoney, formatTime } from "./budget.js";
 
-/**
- * Bottom-sheet modal shown when a History row is tapped.
- * Offers "Edit Transaction" and "Delete" actions.
- */
+const DANGER = "#EF4444";
+
+/** Bottom-sheet modal for a tapped transaction: Edit or Delete. Slides up with
+ *  a drag handle and a glass backdrop. */
 export default function EditSheet({ tx, category, symbol, onClose, onEdit, onDelete }) {
   if (!tx) return null;
 
   return (
     <div className="fixed inset-0 z-30 flex items-end justify-center">
-      {/* Backdrop */}
       <button
         aria-label="Close"
         onClick={onClose}
-        className="absolute inset-0 bg-black/40"
+        className="absolute inset-0 bg-gray-950/40 backdrop-blur-sm"
       />
-      {/* Sheet */}
-      <div
-        className="relative w-full max-w-md rounded-t-3xl bg-white dark:bg-neutral-800
-                   p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-2xl
-                   animate-[slideUp_200ms_ease-out]"
-        style={{}}
-      >
-        <div className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-gray-300 dark:bg-white/20" />
+      <div className="relative w-full max-w-md animate-[slideUp_200ms_ease-out] rounded-t-3xl border border-gray-200 bg-white p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-2xl dark:border-gray-800 dark:bg-gray-900">
+        <div className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-gray-300 dark:bg-gray-700" />
 
-        <div className="flex items-center gap-3 mb-5">
+        <div className="mb-5 flex items-center gap-3">
           <span
             className="flex h-12 w-12 items-center justify-center rounded-full text-2xl"
             style={{ backgroundColor: (category?.color || "#888") + "22" }}
@@ -32,14 +25,14 @@ export default function EditSheet({ tx, category, symbol, onClose, onEdit, onDel
             {category?.icon || "❔"}
           </span>
           <div className="min-w-0 flex-1">
-            <div className="font-semibold text-gray-900 dark:text-white">
+            <div className="font-semibold text-gray-900 dark:text-gray-50">
               {category?.name || "Uncategorized"}
             </div>
-            <div className="text-sm text-gray-500 dark:text-gray-400 truncate">
+            <div className="truncate text-sm text-gray-500 dark:text-gray-400">
               {tx.note || "No note"} · {formatTime(tx.ts)}
             </div>
           </div>
-          <div className="text-lg font-bold text-gray-900 dark:text-white tabular-nums">
+          <div className="font-mono text-lg font-bold tabular-nums text-gray-900 dark:text-gray-50">
             {formatMoney(tx.amount, symbol)}
           </div>
         </div>
@@ -47,13 +40,14 @@ export default function EditSheet({ tx, category, symbol, onClose, onEdit, onDel
         <div className="space-y-3">
           <button
             onClick={() => onEdit(tx)}
-            className="w-full rounded-2xl bg-matcha py-3.5 text-base font-semibold text-white active:scale-[0.99] transition"
+            className="w-full rounded-2xl bg-matcha py-3.5 text-base font-semibold text-white transition active:scale-[0.99]"
           >
             Edit Transaction
           </button>
           <button
             onClick={() => onDelete(tx)}
-            className="w-full rounded-2xl bg-over/10 py-3.5 text-base font-semibold text-over active:scale-[0.99] transition"
+            className="w-full rounded-2xl py-3.5 text-base font-semibold transition active:scale-[0.99]"
+            style={{ backgroundColor: DANGER + "1a", color: DANGER }}
           >
             Delete
           </button>

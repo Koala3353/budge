@@ -4,8 +4,13 @@ import Dashboard from "./Dashboard.jsx";
 import History from "./History.jsx";
 import Settings from "./Settings.jsx";
 import BottomNav from "./BottomNav.jsx";
-import { DEFAULT_CATEGORIES, DEFAULT_SETTINGS } from "./seed.js";
+import { DEFAULT_CATEGORIES, DEFAULT_SETTINGS, buildDemoTransactions } from "./seed.js";
 import { genHash, getStoredHash, storeHash, loadBudget, saveBudget } from "./store.js";
+
+// DEMO_MODE feeds mock data to every screen for UI preview (no Supabase calls).
+// Set to false to run live on Supabase (hash accounts, cloud sync) — all of
+// that logic is preserved below and simply bypassed while demoing.
+const DEMO_MODE = true;
 
 /**
  * Root component. Client-side only, but persistence is now in Supabase instead
@@ -65,8 +70,18 @@ export default function App() {
     }
   }
 
-  // First load: get/create hash and hydrate.
+  // First load: demo data, or get/create hash and hydrate from Supabase.
   useEffect(() => {
+    if (DEMO_MODE) {
+      setCategories(DEFAULT_CATEGORIES);
+      setSettings(DEFAULT_SETTINGS);
+      setTransactions(buildDemoTransactions(DEFAULT_CATEGORIES, DEFAULT_SETTINGS));
+      setWeekOverrides({});
+      setHash("demo000000000000000000000000demo");
+      setSync("saved");
+      setStatus("ready");
+      return;
+    }
     let h = getStoredHash();
     if (!h) {
       h = genHash();
@@ -79,6 +94,7 @@ export default function App() {
 
   // Debounced sync to Supabase on any data change (after initial load).
   useEffect(() => {
+    if (DEMO_MODE) return; // demo edits stay in-memory only
     if (!loadedRef.current || !hash) return;
     setSync("saving");
     const t = setTimeout(async () => {
@@ -206,7 +222,7 @@ export default function App() {
   // --- Loading / error gates ---
   if (status !== "ready") {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-neutral-900 px-6 text-center">
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-950 px-6 text-center">
         {status === "loading" ? (
           <div className="flex flex-col items-center gap-3 text-gray-500 dark:text-gray-400">
             <div className="h-8 w-8 animate-spin rounded-full border-2 border-matcha border-t-transparent" />
@@ -231,7 +247,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-full bg-gray-50 text-gray-900 dark:bg-neutral-900 dark:text-white">
+    <div className="min-h-full bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-50">
       <div className="mx-auto flex min-h-screen max-w-md flex-col pb-24">
         {view === "add" && (
           <QuickAdd

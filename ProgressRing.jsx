@@ -1,10 +1,15 @@
 import { useEffect, useState } from "react";
-import { ringColor } from "./budget.js";
+
+// Color thresholds kept local (budget.js is untouched): matcha -> amber -> red.
+function ringColor(pct, isOver) {
+  if (isOver) return "#EF4444"; // danger
+  if (pct >= 0.8) return "#F59E0B"; // amber
+  return "#5B8C5A"; // matcha
+}
 
 /**
  * Hero progress ring. Animates the stroke from empty to its target on mount
- * and on any state change (transition-all duration-700 ease-out).
- * Color: matcha (safe) -> amber (>=80%) -> red (over). Children render centered.
+ * and on state change (transition-all duration-700 ease-out). Round linecap.
  */
 export default function ProgressRing({
   pct,
@@ -18,7 +23,6 @@ export default function ProgressRing({
   const target = isOver ? 1 : Math.min(Math.max(pct, 0), 1);
   const color = ringColor(pct, isOver);
 
-  // Animate in: start empty, then ease to target on the next frame.
   const [progress, setProgress] = useState(0);
   useEffect(() => {
     const id = requestAnimationFrame(() => setProgress(target));
@@ -29,7 +33,6 @@ export default function ProgressRing({
   return (
     <div className="relative" style={{ width: size, height: size }}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
-        {/* Track */}
         <circle
           cx={size / 2}
           cy={size / 2}
@@ -38,7 +41,6 @@ export default function ProgressRing({
           strokeWidth={stroke}
           className="stroke-gray-200/80 dark:stroke-gray-800"
         />
-        {/* Progress */}
         <circle
           cx={size / 2}
           cy={size / 2}

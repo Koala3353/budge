@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   computeTotals,
   computeCategoryBreakdown,
@@ -17,15 +17,8 @@ import HistoryChart from "./HistoryChart.jsx";
 import Modal from "./Modal.jsx";
 import { PlusIcon } from "./icons.jsx";
 
-// ---------------------------------------------------------------------------
-// DEMO_MODE: shows realistic college-student data at ~90% of budget so the
-// glow-up (amber warning state, charts, streak) is visible immediately.
-// Set to false to drive the dashboard from your real Supabase data instead.
-// (budget.js and the Supabase layer are untouched.)
-// ---------------------------------------------------------------------------
-const DEMO_MODE = true;
+const DANGER = "#EF4444";
 const DAY = 86400000;
-
 const WEEK_DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const RANGES = [
   { key: "week", label: "Week" },
@@ -34,61 +27,7 @@ const RANGES = [
   { key: "year", label: "1 Year" },
 ];
 
-/** Build ~16 weeks of plausible spending. Current week lands at 90% of budget;
- *  the most recent 3 prior weeks are under budget (for the streak badge). */
-function buildDemo(categories, settings) {
-  const now = Date.now();
-  const wsd = settings.weekStartDay;
-  const allowance = settings.weeklyAllowance || 150000;
-  const ids = categories.map((c) => c.id);
-  const idFor = (want, k) => (ids.includes(want) ? want : ids[k % ids.length]);
-  const tx = [];
-  let n = 0;
-
-  // Current week — sums to 90% of the allowance.
-  const target = Math.round(allowance * 0.9);
-  const current = [
-    { note: "JSEC lunch", cat: "food", f: 0.28 },
-    { note: "Grab to Ateneo", cat: "transport", f: 0.13 },
-    { note: "Cold brew refuel", cat: "coffee", f: 0.18 },
-    { note: "Lab printouts", cat: "school", f: 0.15 },
-    { note: "Gym day pass", cat: "fun", f: 0.18 },
-    { note: "Load", cat: "other", f: 0.08 },
-  ];
-  current.forEach((c, k) => {
-    tx.push({
-      id: "d" + n++,
-      amount: Math.round(target * c.f),
-      categoryId: idFor(c.cat, k),
-      note: c.note,
-      ts: now - (k * 7 + 2) * 3600000, // spread over the last couple of days
-    });
-  });
-
-  // Prior weeks — fractions of allowance. First three < 1 => 3-week streak.
-  const fractions = [
-    0.85, 0.78, 0.92, 1.12, 0.7, 0.95, 1.05, 0.6, 0.88, 0.75, 1.1, 0.82, 0.9, 0.65, 0.97, 0.8,
-  ];
-  fractions.forEach((frac, idx) => {
-    const i = idx + 1;
-    const r = getWeekRange(now - i * 7 * DAY, wsd);
-    const weekTotal = Math.round(allowance * frac);
-    const splits = [0.4, 0.35, 0.25];
-    splits.forEach((s, k) => {
-      tx.push({
-        id: "d" + n++,
-        amount: Math.round(weekTotal * s),
-        categoryId: ids[(i + k) % ids.length],
-        note: "",
-        ts: r.start + (k * 2 + 1) * DAY + 9 * 3600000,
-      });
-    });
-  });
-
-  return tx;
-}
-
-/** Count consecutive prior weeks (with activity) that ended under budget. */
+/** Consecutive prior weeks (with activity) that ended under budget. */
 function computeStreak(transactions, settings, overrides, now) {
   let streak = 0;
   for (let i = 1; i <= 16; i++) {
@@ -115,41 +54,30 @@ export default function Dashboard({
   const symbol = settings.currencySymbol;
   const now = Date.now();
 
-  // Data source: demo (default) or real props.
-  const overrides = DEMO_MODE ? {} : weekOverrides;
-  const tx = useMemo(
-    () => (DEMO_MODE ? buildDemo(categories, settings) : transactions),
-    [categories, settings, transactions]
-  );
-
-  // Current week.
   const range = getWeekRange(now, settings.weekStartDay);
   const curKey = weekKey(now, settings.weekStartDay);
-  const weekTx = weekTransactions(tx, range);
-  const allowance = getAllowanceForWeek(curKey, settings, overrides);
+  const weekTx = weekTransactions(transactions, range);
+  const allowance = getAllowanceForWeek(curKey, settings, weekOverrides);
   const { spent, remaining, pct, isOver } = computeTotals(weekTx, allowance);
   const breakdown = computeCategoryBreakdown(weekTx, categories);
   const isEmpty = weekTx.length === 0;
-  const hasOverride = !DEMO_MODE && weekOverrides[curKey] != null;
+  const hasOverride = weekOverrides[curKey] != null;
   const pctSpent = Math.round(pct * 100);
 
-  // Safe-to-spend-today (remaining / remaining days incl. today).
+  // Safe-to-spend today.
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   const remainingDays = Math.max(1, Math.round((range.end - todayStart.getTime()) / DAY));
   const dailyLimit = Math.max(0, Math.floor(remaining / remainingDays));
 
-  // Streak + recent.
-  const streak = computeStreak(tx, settings, overrides, now);
-  const recent = [...tx].sort((a, b) => b.ts - a.ts).slice(0, 3);
+  const streak = computeStreak(transactions, settings, weekOverrides, now);
+  const recent = [...transactions].sort((a, b) => b.ts - a.ts).slice(0, 3);
   const catById = (id) => categories.find((c) => c.id === id);
 
-  // Historical view.
   const [mode, setMode] = useState("month");
-  const history = computeHistory(tx, mode, settings, overrides, now);
+  const history = computeHistory(transactions, mode, settings, weekOverrides, now);
   const rangeTotal = history.buckets.reduce((s, b) => s + b.spent, 0);
 
-  // Adjust-this-week modal.
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [draft, setDraft] = useState((allowance / 100).toString());
 
@@ -157,11 +85,11 @@ export default function Dashboard({
     "rounded-3xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm";
 
   return (
-    <div className="min-h-full bg-gray-50 dark:bg-gray-950 px-4 pt-5 pb-4">
+    <div className="min-h-full bg-gray-50 px-4 pt-5 pb-4 dark:bg-gray-950">
       {/* Header + streak */}
       <header className="mb-4 flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-gray-50">
             This Week
           </h1>
           <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -182,33 +110,34 @@ export default function Dashboard({
             Budget {formatMoney(allowance, symbol)}
             {hasOverride && <span className="ml-1 text-matcha">· adjusted</span>}
           </div>
-          {!DEMO_MODE && (
-            <button
-              onClick={() => {
-                setDraft((allowance / 100).toString());
-                setAdjustOpen(true);
-              }}
-              className="rounded-full bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-700 active:scale-95 dark:bg-white/5 dark:text-gray-200"
-            >
-              Adjust
-            </button>
-          )}
+          <button
+            onClick={() => {
+              setDraft((allowance / 100).toString());
+              setAdjustOpen(true);
+            }}
+            className="rounded-full bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-700 active:scale-95 dark:bg-white/5 dark:text-gray-200"
+          >
+            Adjust
+          </button>
         </div>
 
         <div className="flex flex-col items-center">
           <ProgressRing pct={pct} isOver={isOver}>
             {isOver ? (
               <>
-                <span className="text-5xl font-extrabold tracking-tight text-[#E5484D]">
+                <span className="text-5xl font-extrabold tracking-tight" style={{ color: DANGER }}>
                   -{formatMoney(Math.abs(remaining), symbol)}
                 </span>
-                <span className="mt-1 text-xs font-semibold uppercase tracking-wide text-[#E5484D]">
+                <span
+                  className="mt-1 text-xs font-semibold uppercase tracking-wide"
+                  style={{ color: DANGER }}
+                >
                   over budget
                 </span>
               </>
             ) : (
               <>
-                <span className="text-6xl font-extrabold tracking-tight text-gray-900 dark:text-white">
+                <span className="text-6xl font-extrabold tracking-tight text-gray-900 dark:text-gray-50">
                   {formatMoney(remaining, symbol)}
                 </span>
                 <span className="mt-1 text-xs font-medium text-gray-500 dark:text-gray-400">
@@ -218,10 +147,12 @@ export default function Dashboard({
             )}
           </ProgressRing>
 
-          {/* Safe-to-spend-today */}
           <div className="mt-5 w-full">
             {isOver ? (
-              <div className="rounded-2xl bg-[#E5484D]/10 px-4 py-3 text-center text-sm font-medium text-[#E5484D]">
+              <div
+                className="rounded-2xl px-4 py-3 text-center text-sm font-medium"
+                style={{ backgroundColor: DANGER + "1a", color: DANGER }}
+              >
                 Over for now — let's reset next week 🌱
               </div>
             ) : (
@@ -245,24 +176,24 @@ export default function Dashboard({
       <div className="mb-4 grid grid-cols-2 gap-4">
         <div className={`${card} p-4`}>
           <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Spent this week</p>
-          <p className="mt-1 text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
+          <p className="mt-1 text-2xl font-bold tracking-tight text-gray-900 dark:text-gray-50">
             {formatMoney(spent, symbol)}
           </p>
-          <p className="mt-0.5 text-xs text-gray-400">{pctSpent}% of budget</p>
+          <p className="mt-0.5 font-mono text-xs text-gray-400">{pctSpent}% of budget</p>
         </div>
         <div className={`${card} p-4`}>
           <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Days left</p>
-          <p className="mt-1 text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
+          <p className="mt-1 text-2xl font-bold tracking-tight text-gray-900 dark:text-gray-50">
             {remainingDays}
           </p>
-          <p className="mt-0.5 text-xs text-gray-400">in this week</p>
+          <p className="mt-0.5 font-mono text-xs text-gray-400">in this week</p>
         </div>
       </div>
 
       {/* Category breakdown */}
       <section className={`${card} mb-4 p-5`}>
         <div className="mb-4 flex items-baseline justify-between">
-          <h2 className="text-base font-bold text-gray-900 dark:text-white">Expense by Category</h2>
+          <h2 className="text-base font-bold text-gray-900 dark:text-gray-50">Expense by Category</h2>
           {breakdown.top && (
             <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
               Top: {breakdown.top.icon} {breakdown.top.name}
@@ -287,8 +218,8 @@ export default function Dashboard({
       {/* Spending over time */}
       <section className={`${card} mb-4 p-5`}>
         <div className="mb-3 flex items-baseline justify-between">
-          <h2 className="text-base font-bold text-gray-900 dark:text-white">Spending over time</h2>
-          <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+          <h2 className="text-base font-bold text-gray-900 dark:text-gray-50">Spending over time</h2>
+          <span className="font-mono text-sm font-medium text-gray-500 dark:text-gray-400">
             {formatMoney(rangeTotal, symbol)}
           </span>
         </div>
@@ -299,7 +230,7 @@ export default function Dashboard({
               onClick={() => setMode(r.key)}
               className={`flex-1 rounded-xl py-1.5 text-xs font-semibold transition ${
                 mode === r.key
-                  ? "bg-white text-gray-900 shadow-sm dark:bg-gray-800 dark:text-white"
+                  ? "bg-white text-gray-900 shadow-sm dark:bg-gray-800 dark:text-gray-50"
                   : "text-gray-500 dark:text-gray-400"
               }`}
             >
@@ -313,7 +244,8 @@ export default function Dashboard({
             <span className="inline-block h-2.5 w-2.5 rounded-sm bg-matcha" /> within budget
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="inline-block h-2.5 w-2.5 rounded-sm bg-[#E5484D]" /> over budget
+            <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: DANGER }} />{" "}
+            over budget
           </span>
         </div>
       </section>
@@ -321,7 +253,7 @@ export default function Dashboard({
       {/* Recent transactions */}
       <section className={`${card} p-5`}>
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-base font-bold text-gray-900 dark:text-white">Recent</h2>
+          <h2 className="text-base font-bold text-gray-900 dark:text-gray-50">Recent</h2>
           <button
             onClick={() => onViewAll?.()}
             className="text-sm font-semibold text-matcha active:opacity-70"
@@ -346,14 +278,14 @@ export default function Dashboard({
                     {c?.icon || "💸"}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">
+                    <p className="truncate text-sm font-semibold text-gray-900 dark:text-gray-50">
                       {t.note || c?.name || "Expense"}
                     </p>
                     <p className="text-xs text-gray-400">
                       {c?.name || "Uncategorized"} · {formatTime(t.ts)}
                     </p>
                   </div>
-                  <span className="shrink-0 text-sm font-semibold tabular-nums text-gray-900 dark:text-white">
+                  <span className="shrink-0 font-mono text-sm font-semibold tabular-nums text-gray-900 dark:text-gray-50">
                     -{formatMoney(t.amount, symbol)}
                   </span>
                 </div>
@@ -369,7 +301,7 @@ export default function Dashboard({
             Set a one-off allowance for this week. Other weeks keep the default of{" "}
             {formatMoney(settings.weeklyAllowance, symbol)}.
           </p>
-          <div className="flex items-center rounded-xl border border-gray-200 bg-white px-3 dark:border-white/10 dark:bg-neutral-900">
+          <div className="flex items-center rounded-xl border border-gray-200 bg-white px-3 dark:border-gray-700 dark:bg-gray-950">
             <span className="text-gray-400">{symbol}</span>
             <input
               autoFocus
@@ -377,7 +309,7 @@ export default function Dashboard({
               inputMode="decimal"
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              className="w-full bg-transparent px-2 py-3 text-right text-lg font-semibold tabular-nums text-gray-900 focus:outline-none dark:text-white"
+              className="w-full bg-transparent px-2 py-3 text-right font-mono text-lg font-semibold tabular-nums text-gray-900 focus:outline-none dark:text-gray-50"
             />
           </div>
           <div className="mt-4 space-y-2">

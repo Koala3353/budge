@@ -64,7 +64,7 @@ export default function HistoryChart({ data, symbol }) {
         const x = i * slot + (slot - bw) / 2;
         const barH = Math.max((b.spent / max) * chartH, b.spent > 0 ? 3 : 0);
         const y = TOP + chartH - barH;
-        const fill = b.over ? "#E5484D" : "#5B8C5A";
+        const fill = b.over ? "#EF4444" : "#5B8C5A";
         return (
           <g key={i} className="transition-opacity duration-200 hover:opacity-70">
             <title>
