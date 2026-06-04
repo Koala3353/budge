@@ -29,6 +29,15 @@ const RANGES = [
 
 /** Consecutive prior weeks (with activity) that ended under budget. */
 function computeStreak(transactions, settings, overrides, now) {
+  const currentRange = getWeekRange(now, settings.weekStartDay);
+  const currentSpent = weekTransactions(transactions, currentRange).reduce((s, t) => s + t.amount, 0);
+  const currentAllowance = getAllowanceForWeek(
+    weekKey(currentRange.start, settings.weekStartDay),
+    settings,
+    overrides
+  );
+  if (currentSpent > currentAllowance) return 0;
+
   let streak = 0;
   for (let i = 1; i <= 16; i++) {
     const r = getWeekRange(now - i * 7 * DAY, settings.weekStartDay);

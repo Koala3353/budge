@@ -11,8 +11,11 @@ export default function HistoryChart({ data, symbol }) {
 
   const VBW = 340;
   const VBH = 170;
+  const LEFT = 28;
+  const RIGHT = 6;
   const TOP = 10;
   const AXIS = 24;
+  const chartW = VBW - LEFT - RIGHT;
   const chartH = VBH - TOP - AXIS;
 
   const max = Math.max(
@@ -21,10 +24,12 @@ export default function HistoryChart({ data, symbol }) {
     refLine || 0
   );
   const n = buckets.length || 1;
-  const slot = VBW / n;
+  const slot = chartW / n;
   const bw = Math.min(slot * 0.6, 26);
   const step = n > 8 ? Math.ceil(n / 8) : 1;
   const refY = refLine != null ? TOP + chartH - (refLine / max) * chartH : null;
+  const labelX = 10;
+  const labelY = TOP + chartH / 2;
 
   return (
     <svg
@@ -34,12 +39,23 @@ export default function HistoryChart({ data, symbol }) {
       role="img"
       aria-label="Spending over time"
     >
+      <text
+        x={labelX}
+        y={labelY}
+        textAnchor="middle"
+        className="fill-gray-400"
+        style={{ fontSize: 9 }}
+        transform={`rotate(-90 ${labelX} ${labelY})`}
+      >
+        Spend ({symbol})
+      </text>
+
       {/* Reference line (e.g. daily target) */}
       {refY != null && (
         <>
           <line
-            x1="0"
-            x2={VBW}
+            x1={LEFT}
+            x2={LEFT + chartW}
             y1={refY}
             y2={refY}
             className="stroke-gray-300 dark:stroke-gray-700"
@@ -48,7 +64,7 @@ export default function HistoryChart({ data, symbol }) {
           />
           {refLabel && (
             <text
-              x={VBW}
+              x={LEFT + chartW}
               y={refY - 4}
               textAnchor="end"
               className="fill-gray-400"
@@ -61,7 +77,7 @@ export default function HistoryChart({ data, symbol }) {
       )}
 
       {buckets.map((b, i) => {
-        const x = i * slot + (slot - bw) / 2;
+        const x = LEFT + i * slot + (slot - bw) / 2;
         const barH = Math.max((b.spent / max) * chartH, b.spent > 0 ? 3 : 0);
         const y = TOP + chartH - barH;
         const fill = b.over ? "#EF4444" : "#5B8C5A";

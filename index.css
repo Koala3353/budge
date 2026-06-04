@@ -14,6 +14,18 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+html,
+body {
+  background-color: #f9fafb;
+}
+
+@media (prefers-color-scheme: dark) {
+  html,
+  body {
+    background-color: #030712;
+  }
+}
+
 /* Hide scrollbars on the horizontal category chip row while keeping it scrollable */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
