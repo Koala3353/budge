@@ -28,6 +28,14 @@ export default function HistoryChart({ data, symbol }) {
   const bw = Math.min(slot * 0.6, 26);
   const step = n > 8 ? Math.ceil(n / 8) : 1;
   const refY = refLine != null ? TOP + chartH - (refLine / max) * chartH : null;
+  const rawTicks = [
+    { value: max, y: TOP },
+    { value: Math.round(max / 2), y: TOP + chartH / 2 },
+    { value: 0, y: TOP + chartH },
+  ];
+  const ticks = rawTicks.filter(
+    (tick, index, arr) => arr.findIndex((t) => t.value === tick.value) === index
+  );
   const labelX = 10;
   const labelY = TOP + chartH / 2;
 
@@ -49,6 +57,19 @@ export default function HistoryChart({ data, symbol }) {
       >
         Spend ({symbol})
       </text>
+      {ticks.map((tick) => (
+        <text
+          key={tick.value}
+          x={LEFT - 6}
+          y={tick.y}
+          textAnchor="end"
+          dominantBaseline="middle"
+          className="fill-gray-400"
+          style={{ fontSize: 8 }}
+        >
+          {formatMoney(tick.value, symbol)}
+        </text>
+      ))}
 
       {/* Reference line (e.g. daily target) */}
       {refY != null && (
