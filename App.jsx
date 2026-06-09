@@ -4,62 +4,74 @@ import Dashboard from "./Dashboard.jsx";
 import History from "./History.jsx";
 import Settings from "./Settings.jsx";
 import BottomNav from "./BottomNav.jsx";
-import { DEFAULT_CATEGORIES, DEFAULT_SETTINGS, buildDemoTransactions } from "./seed.js";
+import Welcome from "./Welcome.jsx";
+import { DEFAULT_CATEGORIES, DEFAULT_SETTINGS } from "./seed.js";
 import { genHash, getStoredHash, storeHash, loadBudget, saveBudget } from "./store.js";
 
-// DEMO_MODE feeds mock data to every screen for UI preview (no Supabase calls).
-// Set to false to run live on Supabase (hash accounts, cloud sync) — all of
-// that logic is preserved below and simply bypassed while demoing.
-const DEMO_MODE = false;
-
 /**
- * Root component. Client-side only, but persistence is now in Supabase instead
- * of localStorage — so the same account works across devices.
+ * Root component. Client-side only; persistence is in Supabase.
  *
- * Auth: no email/password. A random hash identifies the account; it's kept in
- * localStorage for auto sign-in. Enter an existing hash on another device to
- * access the same data. Access is scoped server-side by the hash via RPC.
+ * Auth: no email/password. A random hash is the account credential, kept in
+ * localStorage for auto sign-in. On a device with no stored key we show the
+ * Welcome screen (log in with a key OR create a new account) — we do NOT
+ * auto-create an account on every visit, so the database doesn't fill with
+ * empty rows.
  *
- * Data is held as one JSON blob per account ({categories, settings,
- * transactions, weekOverrides}) and synced (debounced) on every change.
+ * Data is one JSON blob per account:
+ * { categories, settings, transactions, weekOverrides, weekSpendDays }.
  */
 export default function App() {
   const [view, setView] = useState("add");
   const [hash, setHash] = useState(null);
-  const [status, setStatus] = useState("loading"); // loading | ready | error | auth
+  const [status, setStatus] = useState("loading"); // loading | auth | ready | error
   const [sync, setSync] = useState("idle"); // idle | saving | saved | error
+  const [authError, setAuthError] = useState("");
 
   const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [transactions, setTransactions] = useState([]);
   const [weekOverrides, setWeekOverrides] = useState({});
+  const [weekSpendDays, setWeekSpendDays] = useState({});
 
   const loadedRef = useRef(false);
 
   function applyState(data) {
     setCategories(data.categories || DEFAULT_CATEGORIES);
-    setSettings(data.settings || DEFAULT_SETTINGS);
+    setSettings({ ...DEFAULT_SETTINGS, ...(data.settings || {}) });
     setTransactions(Array.isArray(data.transactions) ? data.transactions : []);
     setWeekOverrides(data.weekOverrides || {});
+    setWeekSpendDays(data.weekSpendDays || {});
   }
 
-  // Hydrate a hash: load from Supabase, or initialize a fresh account.
-  async function hydrate(h) {
+  // Load an existing account, or create it on first sign-in/new-account.
+  async function hydrate(h, { createIfMissing }) {
     loadedRef.current = false;
     setStatus("loading");
     try {
       const data = await loadBudget(h);
       if (data && data.categories) {
         applyState(data);
-      } else {
+      } else if (createIfMissing) {
         const init = {
           categories: DEFAULT_CATEGORIES,
           settings: DEFAULT_SETTINGS,
           transactions: [],
           weekOverrides: {},
+          weekSpendDays: {},
         };
         applyState(init);
-        await saveBudget(h, { version: 3, ...init });
+        await saveBudget(h, { version: 4, ...init });
+      } else {
+        // Signed in with a key that has no data yet — start it as a fresh account.
+        const init = {
+          categories: DEFAULT_CATEGORIES,
+          settings: DEFAULT_SETTINGS,
+          transactions: [],
+          weekOverrides: {},
+          weekSpendDays: {},
+        };
+        applyState(init);
+        await saveBudget(h, { version: 4, ...init });
       }
       loadedRef.current = true;
       setStatus("ready");
@@ -70,36 +82,32 @@ export default function App() {
     }
   }
 
-  // First load: demo data, or get/create hash and hydrate from Supabase.
+  // First load: auto sign-in if a key is stored, else show the Welcome screen.
   useEffect(() => {
-    if (DEMO_MODE) {
-      setCategories(DEFAULT_CATEGORIES);
-      setSettings(DEFAULT_SETTINGS);
-      setTransactions(buildDemoTransactions(DEFAULT_CATEGORIES, DEFAULT_SETTINGS));
-      setWeekOverrides({});
-      setHash("demo000000000000000000000000demo");
-      setSync("saved");
-      setStatus("ready");
-      return;
-    }
     const h = getStoredHash();
-    if (!h) {
+    if (h) {
+      setHash(h);
+      hydrate(h, { createIfMissing: true });
+    } else {
       setStatus("auth");
-      return;
     }
-    setHash(h);
-    hydrate(h);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Debounced sync to Supabase on any data change (after initial load).
+  // Debounced sync to Supabase on any data change (after load).
   useEffect(() => {
-    if (DEMO_MODE) return; // demo edits stay in-memory only
     if (!loadedRef.current || !hash) return;
     setSync("saving");
     const t = setTimeout(async () => {
       try {
-        await saveBudget(hash, { version: 3, categories, settings, transactions, weekOverrides });
+        await saveBudget(hash, {
+          version: 4,
+          categories,
+          settings,
+          transactions,
+          weekOverrides,
+          weekSpendDays,
+        });
         setSync("saved");
       } catch (e) {
         console.error(e);
@@ -107,23 +115,38 @@ export default function App() {
       }
     }, 600);
     return () => clearTimeout(t);
-  }, [categories, settings, transactions, weekOverrides, hash]);
+  }, [categories, settings, transactions, weekOverrides, weekSpendDays, hash]);
 
-  // --- Account switching ---
-  function useAccount(rawHash) {
+  // --- Auth actions ---
+  async function signIn(rawHash) {
     const h = (rawHash || "").trim();
     if (!h) return;
+    setAuthError("");
     storeHash(h);
     setHash(h);
-    hydrate(h);
+    await hydrate(h, { createIfMissing: false });
     setView("dashboard");
   }
-  function newAccount() {
+  async function createAccount() {
     const h = genHash();
+    setAuthError("");
     storeHash(h);
     setHash(h);
-    hydrate(h);
+    await hydrate(h, { createIfMissing: true });
     setView("add");
+  }
+  function signOut() {
+    try {
+      localStorage.removeItem("budget.hash");
+    } catch {
+      /* ignore */
+    }
+    loadedRef.current = false;
+    setHash(null);
+    setTransactions([]);
+    setWeekOverrides({});
+    setWeekSpendDays({});
+    setStatus("auth");
   }
 
   // --- Transactions ---
@@ -165,7 +188,7 @@ export default function App() {
     });
   }
 
-  // --- Settings & per-week budget ---
+  // --- Settings, per-week budget, per-week spend days ---
   function updateSettings(patch) {
     setSettings((prev) => ({ ...prev, ...patch }));
   }
@@ -177,12 +200,26 @@ export default function App() {
       return next;
     });
   }
+  function setWeekSpendDaysFor(key, days) {
+    setWeekSpendDays((prev) => {
+      const next = { ...prev };
+      if (days == null) delete next[key];
+      else next[key] = days;
+      return next;
+    });
+  }
 
   // --- Backups ---
   function exportData() {
     try {
       const blob = new Blob(
-        [JSON.stringify({ version: 3, categories, settings, transactions, weekOverrides }, null, 2)],
+        [
+          JSON.stringify(
+            { version: 4, categories, settings, transactions, weekOverrides, weekSpendDays },
+            null,
+            2
+          ),
+        ],
         { type: "application/json" }
       );
       const url = URL.createObjectURL(blob);
@@ -207,9 +244,10 @@ export default function App() {
         try {
           const s = JSON.parse(reader.result);
           if (s.categories) setCategories(s.categories);
-          if (s.settings) setSettings(s.settings);
+          if (s.settings) setSettings({ ...DEFAULT_SETTINGS, ...s.settings });
           if (Array.isArray(s.transactions)) setTransactions(s.transactions);
           if (s.weekOverrides) setWeekOverrides(s.weekOverrides);
+          if (s.weekSpendDays) setWeekSpendDays(s.weekSpendDays);
         } catch {
           /* ignore */
         }
@@ -219,14 +257,13 @@ export default function App() {
     input.click();
   }
 
-  // --- Loading / error gates ---
+  // --- Gates ---
   if (status === "auth") {
-    return <AuthGate onUseAccount={useAccount} onNewAccount={newAccount} />;
+    return <Welcome onSignIn={signIn} onCreate={createAccount} error={authError} />;
   }
-
   if (status !== "ready") {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-950 px-6 text-center">
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-6 text-center dark:bg-gray-950">
         {status === "loading" ? (
           <div className="flex flex-col items-center gap-3 text-gray-500 dark:text-gray-400">
             <div className="h-8 w-8 animate-spin rounded-full border-2 border-matcha border-t-transparent" />
@@ -239,7 +276,7 @@ export default function App() {
               Check your connection — your changes are safe.
             </p>
             <button
-              onClick={() => hash && hydrate(hash)}
+              onClick={() => hash && hydrate(hash, { createIfMissing: true })}
               className="rounded-2xl bg-matcha px-5 py-3 font-semibold text-white active:scale-95"
             >
               Retry
@@ -269,7 +306,9 @@ export default function App() {
             transactions={transactions}
             settings={settings}
             weekOverrides={weekOverrides}
+            weekSpendDays={weekSpendDays}
             onSetWeekAllowance={setWeekAllowance}
+            onSetWeekSpendDays={setWeekSpendDaysFor}
             onAdd={() => setView("add")}
             onViewAll={() => setView("history")}
           />
@@ -293,8 +332,9 @@ export default function App() {
             onAddCategory={addCategory}
             onEditCategory={editCategory}
             onDeleteCategory={deleteCategory}
-            onUseAccount={useAccount}
-            onNewAccount={newAccount}
+            onUseAccount={signIn}
+            onNewAccount={createAccount}
+            onSignOut={signOut}
             onExport={exportData}
             onImport={importData}
           />
@@ -302,62 +342,6 @@ export default function App() {
       </div>
 
       <BottomNav view={view} onChange={setView} />
-    </div>
-  );
-}
-
-function AuthGate({ onUseAccount, onNewAccount }) {
-  const [hashInput, setHashInput] = useState("");
-  const canSubmit = hashInput.trim().length > 0;
-
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-6 py-10 text-gray-900 dark:bg-gray-950 dark:text-gray-50">
-      <div className="w-full max-w-md space-y-6">
-        <div className="space-y-2 text-center">
-          <p className="text-sm font-semibold uppercase tracking-wide text-matcha">Weekly Budget</p>
-          <h1 className="text-2xl font-bold tracking-tight">Welcome back</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            Enter an existing account key or create a new one to start tracking.
-          </p>
-        </div>
-
-        <div className="space-y-3">
-          <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-            Account key
-          </label>
-          <input
-            autoFocus
-            value={hashInput}
-            onChange={(e) => setHashInput(e.target.value)}
-            placeholder="paste account key"
-            className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 font-mono text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-matcha/40 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-50"
-          />
-          <button
-            disabled={!canSubmit}
-            onClick={() => onUseAccount(hashInput)}
-            className={`w-full rounded-2xl py-3 text-base font-semibold transition ${
-              canSubmit
-                ? "bg-matcha text-white active:scale-[0.99]"
-                : "cursor-not-allowed bg-gray-200 text-gray-400 dark:bg-gray-800"
-            }`}
-          >
-            Use existing key
-          </button>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <span className="h-px flex-1 bg-gray-200 dark:bg-gray-800" />
-          <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">or</span>
-          <span className="h-px flex-1 bg-gray-200 dark:bg-gray-800" />
-        </div>
-
-        <button
-          onClick={() => onNewAccount()}
-          className="w-full rounded-2xl border border-gray-200 bg-white py-3 text-base font-semibold text-gray-900 active:scale-[0.99] dark:border-gray-700 dark:bg-gray-900 dark:text-gray-50"
-        >
-          Create new account
-        </button>
-      </div>
     </div>
   );
 }

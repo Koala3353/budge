@@ -27,22 +27,17 @@ const RANGES = [
   { key: "year", label: "1 Year" },
 ];
 
-/** Consecutive prior weeks (with activity) that ended under budget. */
+/** Consecutive weeks (back to the account's first activity) that ended under
+ *  budget. Empty weeks within that span count as under budget; we stop at the
+ *  first over-budget week and never look before any data exists. */
 function computeStreak(transactions, settings, overrides, now) {
-  const currentRange = getWeekRange(now, settings.weekStartDay);
-  const currentSpent = weekTransactions(transactions, currentRange).reduce((s, t) => s + t.amount, 0);
-  const currentAllowance = getAllowanceForWeek(
-    weekKey(currentRange.start, settings.weekStartDay),
-    settings,
-    overrides
-  );
-  if (currentSpent > currentAllowance) return 0;
-
+  if (!transactions.length) return 0;
+  const earliest = Math.min(...transactions.map((t) => t.ts));
   let streak = 0;
-  for (let i = 1; i <= 16; i++) {
+  for (let i = 1; i <= 104; i++) {
     const r = getWeekRange(now - i * 7 * DAY, settings.weekStartDay);
+    if (r.end <= earliest) break;
     const wt = weekTransactions(transactions, r);
-    if (wt.length === 0) break;
     const spent = wt.reduce((s, t) => s + t.amount, 0);
     const allw = getAllowanceForWeek(weekKey(r.start, settings.weekStartDay), settings, overrides);
     if (spent <= allw) streak++;
@@ -56,7 +51,9 @@ export default function Dashboard({
   transactions,
   settings,
   weekOverrides,
+  weekSpendDays,
   onSetWeekAllowance,
+  onSetWeekSpendDays,
   onAdd,
   onViewAll,
 }) {
@@ -73,11 +70,11 @@ export default function Dashboard({
   const hasOverride = weekOverrides[curKey] != null;
   const pctSpent = Math.round(pct * 100);
 
-  // Safe-to-spend today.
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  const remainingDays = Math.max(1, Math.round((range.end - todayStart.getTime()) / DAY));
-  const dailyLimit = Math.max(0, Math.floor(remaining / remainingDays));
+  // Spend days: per-week override (this week) falls back to the settings default.
+  const defaultSpendDays = settings.spendDaysPerWeek || 7;
+  const spendDays = weekSpendDays?.[curKey] ?? defaultSpendDays;
+  const hasDaysOverride = weekSpendDays?.[curKey] != null;
+  const dailyLimit = Math.max(0, Math.floor(remaining / Math.max(1, spendDays)));
 
   const streak = computeStreak(transactions, settings, weekOverrides, now);
   const recent = [...transactions].sort((a, b) => b.ts - a.ts).slice(0, 3);
@@ -89,13 +86,14 @@ export default function Dashboard({
 
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [draft, setDraft] = useState((allowance / 100).toString());
+  const [daysOpen, setDaysOpen] = useState(false);
+  const [daysDraft, setDaysDraft] = useState(spendDays);
 
   const card =
     "rounded-3xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm";
 
   return (
     <div className="min-h-full bg-gray-50 px-4 pt-5 pb-4 dark:bg-gray-950">
-      {/* Header + streak */}
       <header className="mb-4 flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-gray-50">
@@ -105,7 +103,7 @@ export default function Dashboard({
             Resets {WEEK_DAYS[settings.weekStartDay]}
           </p>
         </div>
-        {streak >= 2 && (
+        {streak >= 1 && (
           <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-700 dark:bg-amber-400/10 dark:text-amber-400">
             🔥 {streak}-week budget streak!
           </span>
@@ -173,8 +171,8 @@ export default function Dashboard({
                 }`}
               >
                 Daily limit:{" "}
-                <span className="font-bold">{formatMoney(dailyLimit, symbol)}/day</span> to stay on
-                track
+                <span className="font-bold">{formatMoney(dailyLimit, symbol)}/day</span> over{" "}
+                {spendDays} spend day{spendDays === 1 ? "" : "s"}
               </div>
             )}
           </div>
@@ -190,13 +188,25 @@ export default function Dashboard({
           </p>
           <p className="mt-0.5 font-mono text-xs text-gray-400">{pctSpent}% of budget</p>
         </div>
-        <div className={`${card} p-4`}>
-          <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Days left</p>
+        <button
+          onClick={() => {
+            setDaysDraft(spendDays);
+            setDaysOpen(true);
+          }}
+          className={`${card} p-4 text-left active:scale-[0.99]`}
+        >
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Spend days</p>
+            <span className="text-xs font-semibold text-matcha">Edit</span>
+          </div>
           <p className="mt-1 text-2xl font-bold tracking-tight text-gray-900 dark:text-gray-50">
-            {remainingDays}
+            {spendDays}
+            <span className="ml-1 text-sm font-medium text-gray-400">/ week</span>
           </p>
-          <p className="mt-0.5 font-mono text-xs text-gray-400">in this week</p>
-        </div>
+          <p className="mt-0.5 font-mono text-xs text-gray-400">
+            {hasDaysOverride ? "this week" : "default"}
+          </p>
+        </button>
       </div>
 
       {/* Category breakdown */}
@@ -304,6 +314,7 @@ export default function Dashboard({
         )}
       </section>
 
+      {/* Adjust this week's budget */}
       {adjustOpen && (
         <Modal title="Adjust this week's budget" onClose={() => setAdjustOpen(false)}>
           <p className="mb-3 text-sm text-gray-600 dark:text-gray-300">
@@ -340,6 +351,58 @@ export default function Dashboard({
                 className="w-full rounded-2xl py-3 text-base font-medium text-gray-500 dark:text-gray-400"
               >
                 Reset to default
+              </button>
+            )}
+          </div>
+        </Modal>
+      )}
+
+      {/* Edit spend days (this week) */}
+      {daysOpen && (
+        <Modal title="Spend days this week" onClose={() => setDaysOpen(false)}>
+          <p className="mb-4 text-sm text-gray-600 dark:text-gray-300">
+            How many days will you actually spend this week? Your daily limit is the remaining
+            budget split across these days. The default ({defaultSpendDays}/week) is set in Settings.
+          </p>
+          <div className="flex items-center justify-center gap-6">
+            <button
+              onClick={() => setDaysDraft((d) => Math.max(1, d - 1))}
+              className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 text-2xl font-bold text-gray-700 active:scale-95 dark:bg-gray-800 dark:text-gray-100"
+            >
+              −
+            </button>
+            <div className="w-16 text-center">
+              <div className="text-4xl font-extrabold tracking-tight text-gray-900 dark:text-gray-50">
+                {daysDraft}
+              </div>
+              <div className="text-xs text-gray-400">days</div>
+            </div>
+            <button
+              onClick={() => setDaysDraft((d) => Math.min(7, d + 1))}
+              className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 text-2xl font-bold text-gray-700 active:scale-95 dark:bg-gray-800 dark:text-gray-100"
+            >
+              +
+            </button>
+          </div>
+          <div className="mt-5 space-y-2">
+            <button
+              onClick={() => {
+                onSetWeekSpendDays(curKey, daysDraft);
+                setDaysOpen(false);
+              }}
+              className="w-full rounded-2xl bg-matcha py-3.5 text-base font-semibold text-white active:scale-[0.99]"
+            >
+              Save for this week
+            </button>
+            {hasDaysOverride && (
+              <button
+                onClick={() => {
+                  onSetWeekSpendDays(curKey, null);
+                  setDaysOpen(false);
+                }}
+                className="w-full rounded-2xl py-3 text-base font-medium text-gray-500 dark:text-gray-400"
+              >
+                Use default ({defaultSpendDays})
               </button>
             )}
           </div>

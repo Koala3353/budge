@@ -1,22 +1,21 @@
 import { formatMoney } from "./budget.js";
 
 /**
- * Polished SVG trend chart. Rounded-top bars (rx=4), red when over budget,
- * a dashed reference line (e.g. avg/day in week view), muted x-axis labels,
- * and a subtle hover fade. Built with raw SVG — no charting library.
+ * Polished SVG trend chart with a labelled Y-axis (peso scale) for readability.
+ * Rounded-top bars (rx=4), red when over budget, an optional dashed reference
+ * line (e.g. avg/day), muted axis labels, subtle hover. No charting library.
  * `data` = { buckets: [{label, spent, allowance?, over?}], refLine?, refLabel? }
  */
 export default function HistoryChart({ data, symbol }) {
   const { buckets, refLine, refLabel } = data;
 
   const VBW = 340;
-  const VBH = 170;
-  const LEFT = 28;
-  const RIGHT = 6;
+  const VBH = 184;
   const TOP = 10;
-  const AXIS = 24;
-  const chartW = VBW - LEFT - RIGHT;
-  const chartH = VBH - TOP - AXIS;
+  const AXIS_W = 38; // left gutter for y-axis labels
+  const AXIS_B = 24; // bottom gutter for x-axis labels
+  const chartH = VBH - TOP - AXIS_B;
+  const chartW = VBW - AXIS_W;
 
   const max = Math.max(
     1,
@@ -28,14 +27,19 @@ export default function HistoryChart({ data, symbol }) {
   const bw = Math.min(slot * 0.6, 26);
   const step = n > 8 ? Math.ceil(n / 8) : 1;
   const refY = refLine != null ? TOP + chartH - (refLine / max) * chartH : null;
-  const rawTicks = [
-    { value: max, y: TOP },
-    { value: Math.round(max / 2), y: TOP + chartH / 2 },
-    { value: 0, y: TOP + chartH },
-  ];
-  const ticks = rawTicks.filter(
-    (tick, index, arr) => arr.findIndex((t) => t.value === tick.value) === index
-  );
+
+  // Compact peso label for the axis (e.g. ₱2k, ₱1.5k, ₱500).
+  const yLabel = (cents) => {
+    const p = cents / 100;
+    if (p >= 1000) {
+      const k = p / 1000;
+      return `${symbol}${k % 1 === 0 ? k : k.toFixed(1)}k`;
+    }
+    return `${symbol}${Math.round(p)}`;
+  };
+
+  const gridFractions = [0, 0.5, 1];
+
   return (
     <svg
       viewBox={`0 0 ${VBW} ${VBH}`}
@@ -44,48 +48,55 @@ export default function HistoryChart({ data, symbol }) {
       role="img"
       aria-label="Spending over time"
     >
-      {ticks.map((tick) => (
-        <text
-          key={tick.value}
-          x={LEFT - 6}
-          y={tick.y}
-          textAnchor="end"
-          dominantBaseline="middle"
-          className="fill-gray-400"
-          style={{ fontSize: 8 }}
-        >
-          {formatMoney(tick.value, symbol)}
-        </text>
-      ))}
+      {/* Y-axis gridlines + scale labels */}
+      {gridFractions.map((f, i) => {
+        const y = TOP + chartH - f * chartH;
+        return (
+          <g key={`grid-${i}`}>
+            <line
+              x1={AXIS_W}
+              x2={VBW}
+              y1={y}
+              y2={y}
+              className="stroke-gray-200 dark:stroke-gray-800"
+              strokeWidth="1"
+            />
+            <text
+              x={AXIS_W - 5}
+              y={y + 3}
+              textAnchor="end"
+              className="fill-gray-400"
+              style={{ fontSize: 8 }}
+            >
+              {yLabel(max * f)}
+            </text>
+          </g>
+        );
+      })}
 
       {/* Reference line (e.g. daily target) */}
       {refY != null && (
         <>
           <line
-            x1={LEFT}
-            x2={LEFT + chartW}
+            x1={AXIS_W}
+            x2={VBW}
             y1={refY}
             y2={refY}
-            className="stroke-gray-300 dark:stroke-gray-700"
+            stroke="#5B8C5A"
             strokeWidth="1"
             strokeDasharray="3 4"
           />
           {refLabel && (
-            <text
-              x={LEFT + chartW}
-              y={refY - 4}
-              textAnchor="end"
-              className="fill-gray-400"
-              style={{ fontSize: 8 }}
-            >
+            <text x={VBW} y={refY - 4} textAnchor="end" className="fill-matcha" style={{ fontSize: 8 }}>
               {refLabel}
             </text>
           )}
         </>
       )}
 
+      {/* Bars */}
       {buckets.map((b, i) => {
-        const x = LEFT + i * slot + (slot - bw) / 2;
+        const x = AXIS_W + i * slot + (slot - bw) / 2;
         const barH = Math.max((b.spent / max) * chartH, b.spent > 0 ? 3 : 0);
         const y = TOP + chartH - barH;
         const fill = b.over ? "#EF4444" : "#5B8C5A";
@@ -95,15 +106,6 @@ export default function HistoryChart({ data, symbol }) {
               {b.label}: {formatMoney(b.spent, symbol)}
               {b.allowance != null ? ` of ${formatMoney(b.allowance, symbol)}` : ""}
             </title>
-            {/* baseline ghost so very small bars still read as a pill */}
-            <rect
-              x={x}
-              y={TOP + chartH - 3}
-              width={bw}
-              height={3}
-              rx={1.5}
-              className="fill-gray-100 dark:fill-gray-800"
-            />
             <rect x={x} y={y} width={bw} height={barH} rx={4} fill={fill} />
             {i % step === 0 && (
               <text

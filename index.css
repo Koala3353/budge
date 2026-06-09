@@ -8,21 +8,21 @@ body,
   height: 100%;
 }
 
+/* Page background fills the whole viewport (incl. overscroll / pinch-zoom area)
+   so no white shows through. Follows the system light/dark setting. */
+html {
+  background-color: #f9fafb; /* gray-50 */
+}
 body {
   margin: 0;
+  background-color: #f9fafb;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
-
-html,
-body {
-  background-color: #f9fafb;
-}
-
 @media (prefers-color-scheme: dark) {
   html,
   body {
-    background-color: #030712;
+    background-color: #030712; /* gray-950 */
   }
 }
 

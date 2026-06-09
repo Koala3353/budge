@@ -32,6 +32,7 @@ export default function Settings({
   onDeleteCategory,
   onUseAccount,
   onNewAccount,
+  onSignOut,
   onExport,
   onImport,
 }) {
@@ -99,6 +100,14 @@ export default function Settings({
               New account
             </button>
           </div>
+          {onSignOut && (
+            <button
+              onClick={() => setAccountModal("signout")}
+              className="mt-2 w-full rounded-xl py-2.5 text-sm font-semibold text-red-500 active:scale-[0.99]"
+            >
+              Sign out
+            </button>
+          )}
         </div>
       </Section>
 
@@ -131,6 +140,24 @@ export default function Settings({
               </option>
             ))}
           </select>
+        </Field>
+
+        <Field label="Spending days per week">
+          <select
+            value={settings.spendDaysPerWeek || 7}
+            onChange={(e) => onUpdateSettings({ spendDaysPerWeek: Number(e.target.value) })}
+            className={input}
+          >
+            {[1, 2, 3, 4, 5, 6, 7].map((d) => (
+              <option key={d} value={d}>
+                {d} {d === 1 ? "day" : "days"}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 px-1 text-xs text-gray-400">
+            Days you actually spend (e.g. school days). Your daily limit = weekly budget ÷ these
+            days. Override a single week from the Dashboard.
+          </p>
         </Field>
 
         <Field label="Currency symbol">
@@ -235,6 +262,32 @@ export default function Settings({
           >
             Load account
           </button>
+        </Modal>
+      )}
+
+      {accountModal === "signout" && (
+        <Modal title="Sign out of this device?" onClose={() => setAccountModal(null)}>
+          <p className="mb-4 text-sm text-gray-600 dark:text-gray-300">
+            This removes the key from this device and returns to the login screen. Your data stays
+            in the cloud — make sure you've copied your key to get back in.
+          </p>
+          <div className="space-y-2">
+            <button
+              onClick={() => {
+                setAccountModal(null);
+                onSignOut();
+              }}
+              className="w-full rounded-2xl bg-red-500/10 py-3.5 text-base font-semibold text-red-500 active:scale-[0.99]"
+            >
+              Sign out
+            </button>
+            <button
+              onClick={() => setAccountModal(null)}
+              className="w-full rounded-2xl py-3 text-base font-medium text-gray-500 dark:text-gray-400"
+            >
+              Cancel
+            </button>
+          </div>
         </Modal>
       )}
 
