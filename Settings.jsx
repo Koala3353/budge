@@ -41,6 +41,28 @@ export default function Settings({
   const [accountModal, setAccountModal] = useState(null);
   const [copied, setCopied] = useState(false);
   const [hashInput, setHashInput] = useState("");
+  const [updating, setUpdating] = useState(false);
+
+  // Force the latest version: ask the service worker to update, clear the shell
+  // cache, then reload so fresh files are fetched. Data lives in the cloud and
+  // is untouched.
+  async function checkForUpdates() {
+    setUpdating(true);
+    try {
+      if ("serviceWorker" in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map((r) => r.update().catch(() => {})));
+      }
+      if (window.caches) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+    } catch {
+      /* ignore — reload anyway */
+    } finally {
+      window.location.reload();
+    }
+  }
 
   function copyHash() {
     try {
@@ -216,6 +238,24 @@ export default function Settings({
         </div>
         <p className="mt-2 px-1 text-xs text-gray-400">
           Backups download/read a JSON file.
+        </p>
+      </Section>
+
+      <Section title="App">
+        <button
+          onClick={checkForUpdates}
+          disabled={updating}
+          className={`${card} flex w-full items-center justify-center gap-2 py-3.5 text-sm font-semibold text-gray-900 active:scale-[0.99] disabled:opacity-60 dark:text-gray-50`}
+        >
+          {updating && (
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-matcha border-t-transparent" />
+          )}
+          {updating ? "Updating…" : "Check for updates"}
+        </button>
+        <p className="mt-2 px-1 text-xs text-gray-400">
+          budge· caches itself to load instantly and work offline. Tap this if a new version is out
+          and you're still seeing the old one — it clears the cache and reloads. Your data stays
+          safe in the cloud.
         </p>
       </Section>
 

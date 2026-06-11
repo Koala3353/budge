@@ -1,12 +1,34 @@
-import { useEffect, useRef, useState } from "react";
-import QuickAdd from "./QuickAdd.jsx";
-import Dashboard from "./Dashboard.jsx";
-import History from "./History.jsx";
-import Settings from "./Settings.jsx";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import BottomNav from "./BottomNav.jsx";
 import Welcome from "./Welcome.jsx";
 import { DEFAULT_CATEGORIES, DEFAULT_SETTINGS } from "./seed.js";
 import { genHash, getStoredHash, storeHash, loadBudget, saveBudget } from "./store.js";
+
+// Code-split the signed-in app away from the login path. A first-time visitor
+// (no stored key) only downloads React + the Welcome screen, so initial paint
+// is fast; the heavy screens + charts load lazily and are prefetched the moment
+// the Welcome screen renders, so tapping "create account" still feels instant.
+const importQuickAdd = () => import("./QuickAdd.jsx");
+const importDashboard = () => import("./Dashboard.jsx");
+const importHistory = () => import("./History.jsx");
+const importSettings = () => import("./Settings.jsx");
+const QuickAdd = lazy(importQuickAdd);
+const Dashboard = lazy(importDashboard);
+const History = lazy(importHistory);
+const Settings = lazy(importSettings);
+
+function prefetchScreens() {
+  importQuickAdd();
+  importDashboard();
+  importHistory();
+  importSettings();
+}
+
+const Spinner = () => (
+  <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-950">
+    <div className="h-8 w-8 animate-spin rounded-full border-2 border-matcha border-t-transparent" />
+  </div>
+);
 
 /**
  * Root component. Client-side only; persistence is in Supabase.
@@ -93,6 +115,12 @@ export default function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Warm the lazy app chunks once we're showing the login screen, so creating
+  // or entering an account doesn't wait on a download.
+  useEffect(() => {
+    if (status === "auth") prefetchScreens();
+  }, [status]);
 
   // Debounced sync to Supabase on any data change (after load).
   useEffect(() => {
@@ -290,6 +318,7 @@ export default function App() {
   return (
     <div className="min-h-full bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-50">
       <div className="mx-auto flex min-h-screen max-w-md flex-col pb-24">
+        <Suspense fallback={<Spinner />}>
         {view === "add" && (
           <QuickAdd
             categories={categories}
@@ -339,6 +368,7 @@ export default function App() {
             onImport={importData}
           />
         )}
+        </Suspense>
       </div>
 
       <BottomNav view={view} onChange={setView} />
