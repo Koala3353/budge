@@ -24,6 +24,7 @@ import {
   lastWeekRecap,
 } from "./insights.js";
 import ProgressRing from "./ProgressRing.jsx";
+import RingAmount from "./RingAmount.jsx";
 import CategoryBreakdown from "./CategoryBreakdown.jsx";
 import HistoryChart from "./HistoryChart.jsx";
 import Modal from "./Modal.jsx";
@@ -225,16 +226,12 @@ export default function Dashboard({
           <ProgressRing pct={pct} isOver={isOver}>
             {isOver ? (
               <>
-                <span className="text-5xl font-extrabold tracking-tight" style={{ color: DANGER }}>
-                  -{formatMoney(Math.abs(remaining), symbol)}
-                </span>
+                <RingAmount cents={remaining} symbol={symbol} max={48} min={22} className="font-extrabold tracking-tight" style={{ color: DANGER }} />
                 <span className="mt-1 text-xs font-semibold uppercase tracking-wide" style={{ color: DANGER }}>over budget</span>
               </>
             ) : (
               <>
-                <span className="text-6xl font-extrabold tracking-tight text-gray-900 dark:text-gray-50">
-                  {formatMoney(remaining, symbol)}
-                </span>
+                <RingAmount cents={remaining} symbol={symbol} max={60} min={24} className="font-extrabold tracking-tight text-gray-900 dark:text-gray-50" />
                 <span className="mt-1 text-xs font-medium text-gray-500 dark:text-gray-400">left of {formatMoney(allowance, symbol)}</span>
               </>
             )}
@@ -316,19 +313,26 @@ export default function Dashboard({
           </div>
         ) : (
           <>
-            <div className="flex items-end gap-2" style={{ height: 120 }}>
+            <div className="flex items-end gap-2" style={{ height: 132 }}>
               {heat.avg.map((v, i) => {
                 const h = heat.max > 0 ? (v / heat.max) * 100 : 0;
                 const isMax = v > 0 && v === heat.max;
                 return (
                   <div key={i} title={`${heat.labels[i]}: ${formatMoney(v, symbol)} avg`}
                     className="flex h-full flex-1 flex-col items-center justify-end">
-                    {isMax && <span className="mb-1 font-mono text-[10px] text-gray-400">{formatMoney(v, symbol)}</span>}
+                    {v > 0 && (
+                      <span
+                        className="mb-1 whitespace-nowrap font-mono text-[10px] font-semibold tabular-nums"
+                        style={{ color: isMax ? "#D97706" : "#5E6E63" }}
+                      >
+                        {formatMoney(v, symbol)}
+                      </span>
+                    )}
                     <div className="w-full rounded-md transition-all duration-500" style={{
                       height: `${v > 0 ? Math.max(h, 8) : 4}%`,
                       backgroundColor: v > 0 ? (isMax ? "#F59E0B" : "#5B8C5A") : "rgba(148,163,184,0.22)",
                     }} />
-                    <span className="mt-1.5 text-[11px] font-medium text-gray-400">{heat.labels[i]}</span>
+                    <span className="mt-1.5 text-[11px] font-semibold text-gray-500 dark:text-gray-400">{heat.labels[i]}</span>
                   </div>
                 );
               })}
