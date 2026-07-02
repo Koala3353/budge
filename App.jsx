@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import BottomNav from "./BottomNav.jsx";
+import InstallPrompt from "./InstallPrompt.jsx";
 import Welcome from "./Welcome.jsx";
 import { DEFAULT_CATEGORIES, DEFAULT_SETTINGS } from "./seed.js";
 import {
@@ -461,6 +462,7 @@ export default function App() {
       </div>
 
       <BottomNav view={view} onChange={setView} />
+      <InstallPrompt />
     </div>
   );
 }
