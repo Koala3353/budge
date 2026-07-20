@@ -9,6 +9,7 @@ import {
   getAllowanceForWeek,
 } from "./budget.js";
 import { ChartIcon } from "./icons.jsx";
+import SyncStatus from "./SyncStatus.jsx";
 
 const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "⌫"];
 
@@ -23,6 +24,7 @@ export default function QuickAdd({
   transactions,
   settings,
   weekOverrides = {},
+  sync,
   onAdd,
   onGoDashboard,
 }) {
@@ -63,13 +65,10 @@ export default function QuickAdd({
   return (
     <div className="flex min-h-full flex-col bg-gray-50 dark:bg-gray-950">
       {/* Sticky techy status banner -> Dashboard */}
-      <button
-        onClick={onGoDashboard}
-        className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200/70 bg-white/80 px-4 py-3 text-left backdrop-blur-md dark:border-gray-800/70 dark:bg-gray-950/80"
-      >
-        <span className="flex items-center gap-2 text-sm">
-          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: isOver ? "#EF4444" : "#5B8C5A" }} />
-          <span className="text-gray-500 dark:text-gray-400">
+      <div className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-gray-200/70 bg-white/80 px-4 py-3 backdrop-blur-md dark:border-gray-800/70 dark:bg-gray-950/80">
+        <button onClick={onGoDashboard} className="flex min-w-0 items-center gap-2 text-left text-sm">
+          <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: isOver ? "#EF4444" : "#5B8C5A" }} />
+          <span className="truncate text-gray-500 dark:text-gray-400">
             {isOver ? "Over budget" : "Left this week"}
           </span>
           <span
@@ -78,11 +77,14 @@ export default function QuickAdd({
           >
             {isOver ? `-${formatMoney(Math.abs(remaining), symbol)}` : formatMoney(remaining, symbol)}
           </span>
-        </span>
-        <span className="flex items-center gap-1 text-xs font-semibold text-matcha">
-          <ChartIcon size={16} /> Dashboard
-        </span>
-      </button>
+        </button>
+        <div className="flex shrink-0 items-center gap-3">
+          <SyncStatus sync={sync} />
+          <button onClick={onGoDashboard} className="flex items-center gap-1 text-xs font-semibold text-matcha">
+            <ChartIcon size={16} /> Dashboard
+          </button>
+        </div>
+      </div>
 
       {/* Amount readout */}
       <div className="px-4 pt-8 pb-2 text-center">

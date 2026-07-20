@@ -25,6 +25,7 @@ import {
 } from "./insights.js";
 import ProgressRing from "./ProgressRing.jsx";
 import RingAmount from "./RingAmount.jsx";
+import SyncStatus from "./SyncStatus.jsx";
 import CategoryBreakdown from "./CategoryBreakdown.jsx";
 import HistoryChart from "./HistoryChart.jsx";
 import Modal from "./Modal.jsx";
@@ -72,6 +73,7 @@ export default function Dashboard({
   settings,
   weekOverrides,
   weekSpendDays,
+  sync,
   onSetWeekAllowance,
   onSetWeekSpendDays,
   onAdd,
@@ -192,11 +194,14 @@ export default function Dashboard({
           <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-gray-50">This Week</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400">Resets {WEEK_DAYS[settings.weekStartDay]}</p>
         </div>
-        {stk.current >= 1 && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-700 dark:bg-amber-400/10 dark:text-amber-400">
-            🔥 {stk.current}-week streak{stk.longest > stk.current ? ` · best ${stk.longest}` : ""}
-          </span>
-        )}
+        <div className="flex flex-col items-end gap-1.5">
+          {stk.current >= 1 && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-700 dark:bg-amber-400/10 dark:text-amber-400">
+              🔥 {stk.current}-week streak{stk.longest > stk.current ? ` · best ${stk.longest}` : ""}
+            </span>
+          )}
+          <SyncStatus sync={sync} />
+        </div>
       </header>
 
       {/* gentle reminder if nothing logged today */}

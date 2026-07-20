@@ -414,6 +414,7 @@ export default function App() {
             transactions={transactions}
             settings={settings}
             weekOverrides={weekOverrides}
+            sync={sync}
             onAdd={addTransaction}
             onGoDashboard={() => setView("dashboard")}
           />
@@ -425,6 +426,7 @@ export default function App() {
             settings={settings}
             weekOverrides={weekOverrides}
             weekSpendDays={weekSpendDays}
+            sync={sync}
             onSetWeekAllowance={setWeekAllowance}
             onSetWeekSpendDays={setWeekSpendDaysFor}
             onAdd={() => setView("add")}
