@@ -24,8 +24,10 @@ window.addEventListener("appinstalled", () => {
 
 // Register the service worker (relative path keeps it working under the
 // /budge/ GitHub Pages base). The "Check for updates" button in Settings can
-// clear its cache on demand.
-if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+// clear its cache on demand. Production only: the SW's precache list is
+// injected at build time, so the source (with __PRECACHE__ tokens) must never
+// be registered from `vite dev`.
+if (import.meta.env.PROD && "serviceWorker" in navigator && location.protocol.startsWith("http")) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => {
       /* offline / unsupported — app still works without it */
