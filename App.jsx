@@ -100,7 +100,7 @@ export default function App() {
     loadedRef.current = false;
 
     // 1) Instant paint from cache if we have it — no network needed.
-    const cached = readCache(h);
+    const cached = await readCache(h);
     if (cached?.blob?.categories) {
       applyState(cached.blob);
       cachePartialRef.current = cached.partial;
@@ -120,13 +120,13 @@ export default function App() {
           const merged = mergeBlobs(remote, cached.blob);
           applyState(merged);
           cachePartialRef.current = false;
-          writeCache(h, merged);
+          await writeCache(h, merged);
           await saveBudget(h, merged);
           setPending(h, false);
         } else {
           applyState(remote);
           cachePartialRef.current = false;
-          writeCache(h, remote);
+          await writeCache(h, remote);
           setPending(h, false);
         }
       } else {
@@ -142,7 +142,7 @@ export default function App() {
         };
         applyState(init);
         cachePartialRef.current = false;
-        writeCache(h, init);
+        await writeCache(h, init);
         await saveBudget(h, init);
         setPending(h, false);
       }
@@ -207,7 +207,7 @@ export default function App() {
   useEffect(() => {
     async function flush() {
       if (!hash || !isPending(hash)) return;
-      const cached = readCache(hash);
+      const cached = await readCache(hash);
       if (!cached?.blob) return;
       setSync("saving");
       try {
@@ -219,7 +219,7 @@ export default function App() {
           toSave = mergeBlobs(remote, cached.blob);
           applyState(toSave);
           cachePartialRef.current = false;
-          writeCache(hash, toSave);
+          await writeCache(hash, toSave);
         }
         await saveBudget(hash, toSave);
         setPending(hash, false);

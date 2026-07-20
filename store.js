@@ -1,14 +1,9 @@
 import { SUPABASE_URL, SUPABASE_KEY } from "./supabaseClient.js";
 
 const HASH_KEY = "budget.hash";
-const CACHE_PREFIX = "budget.cache.";
+const LEGACY_CACHE_PREFIX = "budget.cache."; // old localStorage cache (pre-IndexedDB)
 const PENDING_PREFIX = "budget.pending.";
 const RPC_URL = `${SUPABASE_URL}/rest/v1/rpc`;
-// Keep the local cache well under the ~5 MB localStorage budget. Each char is a
-// UTF-16 code unit, so ~2M chars ≈ 4 MB — that's tens of thousands of
-// transactions, far more than anyone logs. If we ever approach it we trim the
-// OLDEST transactions from the cache (the newest, unsynced ones are kept).
-const MAX_CACHE_CHARS = 2_000_000;
 
 /** Generate a 128-bit random account hash (32 hex chars). Acts as the credential. */
 export function genHash() {
@@ -69,73 +64,156 @@ export async function saveBudget(hash, payload) {
 }
 
 // ---------------------------------------------------------------------------
-// Offline durability: a write-through localStorage cache + a "pending" flag.
-// The cache lets the app open and show your data instantly and offline; the
-// pending flag marks unsynced changes so they can be flushed when you reconnect.
+// Offline durability: an IndexedDB write-through cache + a "pending" flag.
+//
+// The cache holds one blob per account so the app opens and shows your data
+// instantly and fully offline. IndexedDB (async, hundreds of MB) replaces the
+// old localStorage cache (sync, ~5 MB) — far more headroom and it never blocks
+// the main thread. The tiny "pending" flag and the account hash stay in
+// localStorage: they're a few bytes, quota is irrelevant, and keeping them
+// synchronous keeps the reconnect/startup checks simple.
+//
+// When a write happens we store it here immediately (durable, offline-safe) and
+// set "pending"; App.jsx debounces a push to Supabase and, on reconnect or next
+// launch, flushes anything still pending. Nothing is lost if you're offline.
 // ---------------------------------------------------------------------------
 
-/** Read the cached blob for a hash. Returns { blob, partial } or null. */
-export function readCache(hash) {
+const DB_NAME = "budge";
+const STORE = "cache";
+
+let dbPromise = null;
+function openDB() {
+  if (dbPromise) return dbPromise;
+  dbPromise = new Promise((resolve, reject) => {
+    if (typeof indexedDB === "undefined") {
+      reject(new Error("IndexedDB unavailable"));
+      return;
+    }
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE);
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+  // If opening fails, allow a later retry instead of caching the rejection.
+  dbPromise.catch(() => {
+    dbPromise = null;
+  });
+  return dbPromise;
+}
+
+function idb(mode, run) {
+  return openDB().then(
+    (db) =>
+      new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE, mode);
+        const store = tx.objectStore(STORE);
+        let result;
+        const req = run(store);
+        if (req) req.onsuccess = () => (result = req.result);
+        tx.oncomplete = () => resolve(result);
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error);
+      })
+  );
+}
+
+const idbGet = (key) => idb("readonly", (s) => s.get(key));
+const idbPut = (key, val) => idb("readwrite", (s) => s.put(val, key));
+const idbDel = (key) => idb("readwrite", (s) => s.delete(key));
+
+/**
+ * Read the cached blob for a hash. Returns { blob, partial } or null.
+ * On first run after upgrading, migrates any old localStorage cache into
+ * IndexedDB so unsynced offline edits from before the upgrade aren't lost.
+ */
+export async function readCache(hash) {
   try {
-    const raw = localStorage.getItem(CACHE_PREFIX + hash);
-    if (!raw) return null;
-    const blob = JSON.parse(raw);
+    let blob = await idbGet(hash);
+    if (!blob) {
+      const migrated = migrateLegacy(hash);
+      if (migrated) {
+        blob = migrated;
+        idbPut(hash, blob).catch(() => {}); // best-effort copy into IndexedDB
+        removeLegacy(hash);
+      }
+    }
+    if (!blob) return null;
     return { blob, partial: !!blob._partial };
   } catch {
-    return null;
+    // IndexedDB blocked (e.g. some private-mode browsers) — fall back to the
+    // legacy localStorage cache so the app still works offline.
+    const blob = migrateLegacy(hash);
+    return blob ? { blob, partial: !!blob._partial } : null;
   }
 }
 
 /**
- * Write the blob to the cache, trimming oldest transactions if it would blow
- * the quota. Returns "full" | "partial" | false.
+ * Write the blob to the cache. IndexedDB has ample room, so we store the object
+ * directly; only if the browser rejects it (quota) do we trim the oldest
+ * transactions and retry, marking the copy _partial so a later flush reconciles
+ * against the server. Returns "full" | "partial" | false.
  */
-export function writeCache(hash, blob) {
+export async function writeCache(hash, blob) {
   try {
-    let payload = blob;
-    let str = JSON.stringify(payload);
-    if (str.length > MAX_CACHE_CHARS && Array.isArray(blob.transactions)) {
-      const txs = [...blob.transactions].sort((a, b) => b.ts - a.ts); // newest first
-      let keep = txs.length;
-      while (str.length > MAX_CACHE_CHARS && keep > 50) {
-        keep = Math.floor(keep * 0.8);
-        payload = { ...blob, transactions: txs.slice(0, keep), _partial: true };
-        str = JSON.stringify(payload);
-      }
-    }
-    localStorage.setItem(CACHE_PREFIX + hash, str);
-    return payload._partial ? "partial" : "full";
+    await idbPut(hash, blob);
+    return blob._partial ? "partial" : "full";
   } catch {
-    // Quota exceeded or private mode — fall back to a hard-trimmed copy so the
-    // most recent activity still survives a reload; give up quietly otherwise.
     try {
       const txs = Array.isArray(blob.transactions)
-        ? [...blob.transactions].sort((a, b) => b.ts - a.ts).slice(0, 500)
+        ? [...blob.transactions].sort((a, b) => b.ts - a.ts).slice(0, 2000)
         : [];
-      localStorage.setItem(
-        CACHE_PREFIX + hash,
-        JSON.stringify({ ...blob, transactions: txs, _partial: true })
-      );
+      await idbPut(hash, { ...blob, transactions: txs, _partial: true });
       return "partial";
     } catch {
+      // IndexedDB fully unavailable — last-ditch hard-trimmed localStorage copy
+      // so the most recent activity still survives a reload.
       try {
-        localStorage.removeItem(CACHE_PREFIX + hash);
+        const txs = Array.isArray(blob.transactions)
+          ? [...blob.transactions].sort((a, b) => b.ts - a.ts).slice(0, 500)
+          : [];
+        localStorage.setItem(
+          LEGACY_CACHE_PREFIX + hash,
+          JSON.stringify({ ...blob, transactions: txs, _partial: true })
+        );
+        return "partial";
       } catch {
-        /* ignore */
+        return false;
       }
-      return false;
     }
   }
 }
 
-export function clearCache(hash) {
+export async function clearCache(hash) {
   try {
-    localStorage.removeItem(CACHE_PREFIX + hash);
-    localStorage.removeItem(PENDING_PREFIX + hash);
+    await idbDel(hash);
+  } catch {
+    /* ignore */
+  }
+  removeLegacy(hash);
+  setPending(hash, false);
+}
+
+// --- legacy localStorage cache helpers (read-only, for migration/fallback) ---
+function migrateLegacy(hash) {
+  try {
+    const raw = localStorage.getItem(LEGACY_CACHE_PREFIX + hash);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+function removeLegacy(hash) {
+  try {
+    localStorage.removeItem(LEGACY_CACHE_PREFIX + hash);
   } catch {
     /* ignore */
   }
 }
+
+// --- pending flag: stays in localStorage (tiny, sync, quota-free) ------------
 
 export function setPending(hash, val) {
   try {
