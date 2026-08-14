@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   computeTotals,
   computeCategoryBreakdown,
@@ -26,6 +26,7 @@ import {
 import ProgressRing from "./ProgressRing.jsx";
 import RingAmount from "./RingAmount.jsx";
 import SyncStatus from "./SyncStatus.jsx";
+import ShareSheet from "./ShareSheet.jsx";
 import CategoryBreakdown from "./CategoryBreakdown.jsx";
 import HistoryChart from "./HistoryChart.jsx";
 import Modal from "./Modal.jsx";
@@ -144,48 +145,25 @@ export default function Dashboard({
     ? `${lwd.delta <= 0 ? "↓" : "↑"} ${formatMoney(Math.abs(lwd.delta), symbol)} vs last week`
     : "first week";
 
-  // --- shareable recap card (client-side canvas -> PNG download) ---
-  function shareRecap() {
-    if (!recap) return;
-    const c = document.createElement("canvas");
-    c.width = 1080;
-    c.height = 1080;
-    const x = c.getContext("2d");
-    x.fillStyle = "#0a0f0c";
-    x.fillRect(0, 0, 1080, 1080);
-    x.textBaseline = "alphabetic";
-    x.fillStyle = "#8cb281";
-    x.font = "600 32px Inter, Arial, sans-serif";
-    x.fillText("last week · budge·", 80, 140);
-    x.fillStyle = "#f9fafb";
-    x.font = "700 150px Inter, Arial, sans-serif";
-    x.fillText(formatMoney(recap.spent, symbol), 80, 360);
-    x.fillStyle = "#97a6ba";
-    x.font = "400 44px Inter, Arial, sans-serif";
-    x.fillText("of " + formatMoney(recap.allowance, symbol) + " budget", 84, 430);
-    const over = recap.over > 0;
-    x.fillStyle = over ? "#ef4444" : "#7ba87a";
-    x.font = "700 64px Inter, Arial, sans-serif";
-    x.fillText(
-      over ? "over by " + formatMoney(recap.over, symbol) : "under by " + formatMoney(-recap.over, symbol) + "  🌱",
-      80,
-      560
-    );
-    if (recap.top) {
-      x.fillStyle = "#cbd6c6";
-      x.font = "400 40px Inter, Arial, sans-serif";
-      x.fillText(`top: ${recap.top.icon} ${recap.top.name}  ${formatMoney(recap.topAmt, symbol)}`, 80, 660);
-    }
-    x.fillStyle = "#5b8c5a";
-    x.fillRect(80, 900, 920, 4);
-    x.fillStyle = "#97a6ba";
-    x.font = "500 36px Inter, Arial, sans-serif";
-    x.fillText("budge· — make it to Friday", 80, 980);
-    const a = document.createElement("a");
-    a.href = c.toDataURL("image/png");
-    a.download = "budge-week.png";
-    a.click();
-  }
+  // --- shareable recap: options sheet -> image + message ---
+  const [shareOpen, setShareOpen] = useState(false);
+  const shareData = useMemo(() => {
+    if (!recap) return null;
+    const lastTx = transactions.filter((t) => t.ts >= recap.start && t.ts < recap.end);
+    const byCat = computeCategoryBreakdown(lastTx, categories).rows.map((r) => ({
+      name: r.name,
+      icon: r.icon,
+      amount: r.amount,
+    }));
+    const purchases = [...lastTx]
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 5)
+      .map((t) => ({
+        label: t.note?.trim() || catById(t.categoryId)?.name || "Expense",
+        amount: t.amount,
+      }));
+    return { recap, categories: byCat, purchases, streak: stk.current };
+  }, [recap, transactions, categories, stk.current]);
 
   return (
     <div className="min-h-full bg-gray-50 px-4 pt-5 pb-4 dark:bg-gray-950">
@@ -375,7 +353,7 @@ export default function Dashboard({
         <section className={`${card} mb-4 p-5`}>
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-base font-bold text-gray-900 dark:text-gray-50">Last week recap</h2>
-            <button onClick={shareRecap} className="rounded-full bg-matcha/10 px-3 py-1.5 text-xs font-semibold text-matcha active:scale-95">↓ Share</button>
+            <button onClick={() => setShareOpen(true)} className="rounded-full bg-matcha/10 px-3 py-1.5 text-xs font-semibold text-matcha active:scale-95">Share</button>
           </div>
           <p className="text-sm text-gray-600 dark:text-gray-300">
             Spent <span className="font-mono font-semibold text-gray-900 dark:text-gray-50">{formatMoney(recap.spent, symbol)}</span> of {formatMoney(recap.allowance, symbol)} —{" "}
@@ -417,6 +395,11 @@ export default function Dashboard({
           </div>
         )}
       </section>
+
+      {/* Share options, shown before the system share sheet */}
+      {shareOpen && shareData && (
+        <ShareSheet data={shareData} symbol={symbol} onClose={() => setShareOpen(false)} />
+      )}
 
       {/* Adjust this week's budget */}
       {adjustOpen && (
