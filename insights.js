@@ -161,26 +161,6 @@ export function streaks(transactions, settings, overrides, now = Date.now()) {
   return { current, longest };
 }
 
-/** Total left over (allowance − spent) across completed weeks with activity. */
-export function leftover(transactions, settings, overrides, now = Date.now()) {
-  if (!transactions.length) return { total: 0, weeks: 0 };
-  const wsd = settings.weekStartDay;
-  const earliest = Math.min(...transactions.map((t) => t.ts));
-  const cur = getWeekRange(now, wsd);
-  let total = 0, weeks = 0, guard = 0;
-  let r = getWeekRange(earliest, wsd);
-  while (r.start < cur.start && guard++ < 520) {
-    const t = weekTransactions(transactions, r);
-    if (t.length) {
-      const left = getAllowanceForWeek(weekKey(r.start, wsd), settings, overrides) - sum(t);
-      if (left > 0) total += left;
-      weeks++;
-    }
-    r = getWeekRange(r.start + 7 * DAY, wsd);
-  }
-  return { total, weeks };
-}
-
 /** Summary of the most recent completed week (for the recap / share card). */
 export function lastWeekRecap(transactions, settings, overrides, categories, now = Date.now()) {
   const wsd = settings.weekStartDay;
@@ -272,22 +252,59 @@ export function timeOfDay(transactions, start, end) {
 }
 
 /**
- * Weekly totals per category for the last `weeks` weeks (oldest first), used to
- * draw a sparkline beside each category row. Returns { [categoryId]: number[] }.
+ * The bucket boundaries a range mode is made of, oldest first. Mirrors the
+ * buckets computeHistory() charts, so a sparkline drawn from these lines up
+ * with the bars above it instead of quietly covering a different span.
  */
-export function categorySeries(transactions, categoryIds, settings, now = Date.now(), weeks = 8) {
+export function bucketRanges(mode, settings, now = Date.now()) {
   const wsd = settings.weekStartDay;
-  const cur = getWeekRange(now, wsd);
-  const out = {};
-  for (const id of categoryIds) out[id] = [];
-  for (let i = weeks - 1; i >= 0; i--) {
-    const r = getWeekRange(cur.start - i * 7 * DAY, wsd);
-    const tx = weekTransactions(transactions, r);
-    for (const id of categoryIds) {
-      out[id].push(tx.reduce((s, t) => (t.categoryId === id ? s + t.amount : s), 0));
+  const out = [];
+  if (mode === "week") {
+    const { start } = getWeekRange(now, wsd);
+    for (let i = 0; i < 7; i++) {
+      const ds = new Date(start);
+      ds.setDate(new Date(start).getDate() + i);
+      out.push({ start: ds.getTime(), end: ds.getTime() + DAY });
     }
+    return { ranges: out, unit: "day", label: "this week, by day" };
   }
-  return out;
+  if (mode === "month" || mode === "3m") {
+    const weeks = mode === "month" ? 5 : 13;
+    const cur = getWeekRange(now, wsd);
+    for (let i = weeks - 1; i >= 0; i--) {
+      const ws = new Date(cur.start);
+      ws.setDate(new Date(cur.start).getDate() - i * 7);
+      out.push(getWeekRange(ws.getTime(), wsd));
+    }
+    return { ranges: out, unit: "week", label: `last ${weeks} weeks` };
+  }
+  const base = new Date(now);
+  for (let i = 11; i >= 0; i--) {
+    const m = new Date(base.getFullYear(), base.getMonth() - i, 1);
+    out.push({
+      start: m.getTime(),
+      end: new Date(m.getFullYear(), m.getMonth() + 1, 1).getTime(),
+    });
+  }
+  return { ranges: out, unit: "month", label: "last 12 months" };
+}
+
+/**
+ * Per-category totals for each bucket of the selected range (oldest first),
+ * used to draw the sparkline beside each category row. Returns
+ * { series: { [categoryId]: number[] }, label } where `label` says what one
+ * point represents, so the chart never has to be explained twice.
+ */
+export function categorySeries(transactions, categoryIds, mode, settings, now = Date.now()) {
+  const { ranges, unit, label } = bucketRanges(mode, settings, now);
+  const series = {};
+  for (const id of categoryIds) series[id] = ranges.map(() => 0);
+  for (const t of transactions) {
+    const i = ranges.findIndex((r) => t.ts >= r.start && t.ts < r.end);
+    if (i === -1) continue;
+    if (series[t.categoryId]) series[t.categoryId][i] += t.amount;
+  }
+  return { series, unit, label };
 }
 
 /**
@@ -331,4 +348,52 @@ export function categoryStats(transactions, categories, start, end) {
   }
   rows.sort((a, b) => b.amount - a.amount);
   return { rows, total, count: rows.reduce((s, r) => s + r.count, 0) };
+}
+
+/**
+ * The honest savings ledger: for every completed week you actually logged in,
+ * budget minus spend. A week you went over is a NEGATIVE row and is subtracted,
+ * so `net` answers "am I up or actually down?" rather than only counting the
+ * good weeks. Weeks with no activity are skipped — a week before you started
+ * logging is not a ₱2,000 saving.
+ *
+ * The current week is reported separately as `current` and left out of the
+ * totals, because it isn't finished and counting it would swing the number
+ * every time you log a lunch.
+ */
+export function savingsLedger(transactions, settings, overrides, now = Date.now()) {
+  const wsd = settings.weekStartDay;
+  const empty = { rows: [], saved: 0, overspent: 0, net: 0, weeks: 0, best: null, worst: null, current: null };
+  if (!transactions.length) return empty;
+
+  const cur = getWeekRange(now, wsd);
+  const earliest = Math.min(...transactions.map((t) => t.ts));
+  const rows = [];
+  let r = getWeekRange(earliest, wsd);
+  let guard = 0;
+  while (r.start < cur.start && guard++ < 520) {
+    const tx = weekTransactions(transactions, r);
+    if (tx.length) {
+      const allowance = getAllowanceForWeek(weekKey(r.start, wsd), settings, overrides);
+      const spent = sum(tx);
+      rows.push({ start: r.start, end: r.end, allowance, spent, net: allowance - spent, count: tx.length });
+    }
+    r = getWeekRange(r.start + 7 * DAY, wsd);
+  }
+
+  const saved = rows.reduce((s, x) => (x.net > 0 ? s + x.net : s), 0);
+  const overspent = rows.reduce((s, x) => (x.net < 0 ? s - x.net : s), 0);
+  const curTx = weekTransactions(transactions, cur);
+  const curAllowance = getAllowanceForWeek(weekKey(cur.start, wsd), settings, overrides);
+
+  return {
+    rows,
+    saved,
+    overspent,
+    net: saved - overspent,
+    weeks: rows.length,
+    best: rows.length ? rows.reduce((m, x) => (x.net > m.net ? x : m)) : null,
+    worst: rows.length ? rows.reduce((m, x) => (x.net < m.net ? x : m)) : null,
+    current: { allowance: curAllowance, spent: sum(curTx), net: curAllowance - sum(curTx), count: curTx.length },
+  };
 }

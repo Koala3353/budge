@@ -1,0 +1,231 @@
+import { useState } from "react";
+import { formatMoney } from "./budget.js";
+
+const GOOD = "#5B8C5A";
+const BAD = "#EF4444";
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const short = (ts) => {
+  const d = new Date(ts);
+  return `${MONTHS[d.getMonth()]} ${d.getDate()}`;
+};
+
+/**
+ * Week-by-week budget minus spend, as a diverging chart: kept above the line,
+ * overspent below it. Polarity is the whole point of this view, so the zero
+ * baseline is drawn solid and sits wherever the data puts it — bars are never
+ * rescaled to hide which side of it you're on.
+ */
+function DivergingWeeks({ rows, symbol }) {
+  const n = rows.length;
+  const [sel, setSel] = useState(null);
+  const selIdx = sel != null && sel < n ? sel : n - 1;
+  const picked = rows[selIdx];
+
+  const VBW = 340;
+  const VBH = 170;
+  const AXIS_B = 20;
+  const plotH = VBH - AXIS_B;
+  const maxUp = Math.max(0, ...rows.map((r) => r.net));
+  const maxDown = Math.max(0, ...rows.map((r) => -r.net));
+  const span = Math.max(1, maxUp + maxDown);
+  // Zero sits proportionally, so a run of only-good weeks doesn't fake a baseline
+  // halfway up the chart.
+  const zeroY = (maxUp / span) * plotH;
+  const slot = VBW / n;
+  const bw = Math.min(slot * 0.6, 26);
+
+  return (
+    <div>
+      <div className="mb-2 flex items-baseline justify-between gap-2">
+        <span className="text-sm font-semibold text-gray-900 dark:text-gray-50">
+          Week of {short(picked.start)}
+          <span
+            className="ml-2 font-mono tabular-nums"
+            style={{ color: picked.net >= 0 ? GOOD : BAD }}
+          >
+            {picked.net >= 0 ? "+" : "−"}
+            {formatMoney(Math.abs(picked.net), symbol)}
+          </span>
+        </span>
+        <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+          {formatMoney(picked.spent, symbol)} of {formatMoney(picked.allowance, symbol)}
+        </span>
+      </div>
+
+      <svg
+        viewBox={`0 0 ${VBW} ${VBH}`}
+        width="100%"
+        role="img"
+        aria-label={`Kept or overspent each week. Week of ${short(picked.start)}: ${
+          picked.net >= 0 ? "kept" : "over by"
+        } ${formatMoney(Math.abs(picked.net), symbol)}`}
+      >
+        {rows.map((r, i) => {
+          const slotX = i * slot;
+          const x = slotX + (slot - bw) / 2;
+          const h = Math.max((Math.abs(r.net) / span) * plotH, r.net === 0 ? 0 : 2);
+          const up = r.net >= 0;
+          const y = up ? zeroY - h : zeroY;
+          const isSel = i === selIdx;
+          return (
+            <g key={r.start} onClick={() => setSel(i)} style={{ cursor: "pointer" }}>
+              <rect x={slotX} y={0} width={slot} height={plotH} fill="transparent" />
+              <title>
+                {short(r.start)}: {up ? "kept" : "over by"} {formatMoney(Math.abs(r.net), symbol)}
+              </title>
+              <rect
+                x={x}
+                y={y}
+                width={bw}
+                height={h}
+                // Rounded at the data end only; the baseline end stays square.
+                rx={3}
+                fill={up ? GOOD : BAD}
+                opacity={isSel ? 1 : 0.5}
+              />
+              {/* square off the baseline end again */}
+              <rect x={x} y={up ? zeroY - 3 : zeroY} width={bw} height={3} fill={up ? GOOD : BAD} opacity={isSel ? 1 : 0.5} />
+              {isSel && (
+                <text
+                  x={x + bw / 2}
+                  y={VBH - 6}
+                  textAnchor="middle"
+                  className="fill-gray-900 dark:fill-gray-50"
+                  style={{ fontSize: 9, fontWeight: 700 }}
+                >
+                  {short(r.start)}
+                </text>
+              )}
+            </g>
+          );
+        })}
+        {/* zero baseline, drawn last so it sits on top of every bar */}
+        <line x1="0" x2={VBW} y1={zeroY} y2={zeroY} className="stroke-gray-400 dark:stroke-gray-500" strokeWidth="1" />
+      </svg>
+      <p className="mt-1 text-center text-xs text-gray-500 dark:text-gray-400">Tap a week to read it</p>
+    </div>
+  );
+}
+
+/**
+ * The "am I actually up?" view. The headline is all-time and deliberately nets
+ * overspending off savings — counting only the good weeks is what made the old
+ * "Saved so far" number flattering and wrong.
+ */
+export default function SavingsView({ ledger, symbol, rangeRows, rangeLabel, card }) {
+  const { saved, overspent, net, weeks, best, worst, current } = ledger;
+  const up = net >= 0;
+
+  if (!weeks) {
+    return (
+      <section className={`${card} p-6 text-center`}>
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          No completed weeks yet. Once your first week wraps up, what you kept — or went over —
+          starts adding up here.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <>
+      <section className={`${card} mb-4 p-6`}>
+        <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
+          {up ? "Net kept" : "Net down"} · {weeks} completed week{weeks === 1 ? "" : "s"}
+        </p>
+        <p
+          className="mt-1 text-4xl font-extrabold tracking-tight tabular-nums"
+          style={{ color: up ? GOOD : BAD }}
+        >
+          {up ? "" : "−"}
+          {formatMoney(Math.abs(net), symbol)}
+        </p>
+        <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+          {up
+            ? "Budget minus spending, across every week you've logged. You're ahead."
+            : "Budget minus spending, across every week you've logged. Your over-budget weeks outweigh what you put aside."}
+        </p>
+
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <div className="rounded-2xl bg-matcha/10 px-4 py-3">
+            <p className="text-xs font-medium text-matcha">Put aside</p>
+            <p className="mt-0.5 font-mono text-lg font-bold tabular-nums" style={{ color: GOOD }}>
+              {formatMoney(saved, symbol)}
+            </p>
+            <p className="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">
+              on under-budget weeks
+            </p>
+          </div>
+          <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: BAD + "1a" }}>
+            <p className="text-xs font-medium" style={{ color: BAD }}>Spent over</p>
+            <p className="mt-0.5 font-mono text-lg font-bold tabular-nums" style={{ color: BAD }}>
+              {formatMoney(overspent, symbol)}
+            </p>
+            <p className="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">
+              on over-budget weeks
+            </p>
+          </div>
+        </div>
+
+        {current && current.count > 0 && (
+          <div className="mt-3 rounded-2xl bg-gray-50 px-4 py-3 text-sm dark:bg-white/5">
+            <span className="text-gray-500 dark:text-gray-400">This week so far </span>
+            <span
+              className="font-mono font-semibold tabular-nums"
+              style={{ color: current.net >= 0 ? GOOD : BAD }}
+            >
+              {current.net >= 0 ? "+" : "−"}
+              {formatMoney(Math.abs(current.net), symbol)}
+            </span>
+            <span className="text-gray-500 dark:text-gray-400"> — not counted until it ends</span>
+          </div>
+        )}
+      </section>
+
+      <section className={`${card} mb-4 p-5`}>
+        <h2 className="text-base font-bold text-gray-900 dark:text-gray-50">Week by week</h2>
+        {/* Counts the weeks actually plotted, not the weeks the range spans — the
+            current week is still running and has no final figure to draw. */}
+        <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">
+          {rangeRows.length > 0
+            ? `Kept above the line, over below · ${rangeRows.length} completed week${
+                rangeRows.length === 1 ? "" : "s"
+              } in ${rangeLabel}`
+            : `Nothing to plot — ${rangeLabel} holds no completed weeks yet. Pick a longer range.`}
+        </p>
+        {rangeRows.length > 0 && <DivergingWeeks rows={rangeRows} symbol={symbol} />}
+      </section>
+
+      <section className={`${card} p-5`}>
+        <h2 className="mb-3 text-base font-bold text-gray-900 dark:text-gray-50">Your extremes</h2>
+        <div className="space-y-2.5">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="text-sm text-gray-600 dark:text-gray-300">
+              Best week · {short(best.start)}
+            </span>
+            <span className="font-mono text-sm font-semibold tabular-nums" style={{ color: best.net >= 0 ? GOOD : BAD }}>
+              {best.net >= 0 ? "+" : "−"}{formatMoney(Math.abs(best.net), symbol)}
+            </span>
+          </div>
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="text-sm text-gray-600 dark:text-gray-300">
+              Worst week · {short(worst.start)}
+            </span>
+            <span className="font-mono text-sm font-semibold tabular-nums" style={{ color: worst.net >= 0 ? GOOD : BAD }}>
+              {worst.net >= 0 ? "+" : "−"}{formatMoney(Math.abs(worst.net), symbol)}
+            </span>
+          </div>
+          <div className="flex items-baseline justify-between gap-2 border-t border-gray-100 pt-2.5 dark:border-gray-800">
+            <span className="text-sm text-gray-600 dark:text-gray-300">Average week</span>
+            <span
+              className="font-mono text-sm font-semibold tabular-nums"
+              style={{ color: net >= 0 ? GOOD : BAD }}
+            >
+              {net >= 0 ? "+" : "−"}{formatMoney(Math.abs(Math.round(net / weeks)), symbol)}
+            </span>
+          </div>
+        </div>
+      </section>
+    </>
+  );
+}

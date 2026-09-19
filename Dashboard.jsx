@@ -20,13 +20,13 @@ import {
   dowHeatmap,
   categoryTrend,
   streaks,
-  leftover,
   lastWeekRecap,
   rangeBounds,
   budgetForRange,
   timeOfDay,
   categorySeries,
   categoryStats,
+  savingsLedger,
 } from "./insights.js";
 import ProgressRing from "./ProgressRing.jsx";
 import RingAmount from "./RingAmount.jsx";
@@ -36,6 +36,7 @@ import CategoryBreakdown from "./CategoryBreakdown.jsx";
 import HistoryChart from "./HistoryChart.jsx";
 import TimeOfDayChart from "./TimeOfDayChart.jsx";
 import CategoryDetail from "./CategoryDetail.jsx";
+import SavingsView from "./SavingsView.jsx";
 import Modal from "./Modal.jsx";
 import { PlusIcon } from "./icons.jsx";
 
@@ -53,6 +54,7 @@ const TABS = [
   { key: "overview", label: "Overview" },
   { key: "categories", label: "Categories" },
   { key: "trends", label: "Trends" },
+  { key: "saved", label: "Saved" },
 ];
 
 const card =
@@ -158,7 +160,6 @@ export default function Dashboard({
   const heat = dowHeatmap(transactions, settings, now);
   const trend = categoryTrend(transactions, categories, settings, now);
   const stk = streaks(transactions, settings, weekOverrides, now);
-  const saved = leftover(transactions, settings, weekOverrides, now);
   const recap = lastWeekRecap(transactions, settings, weekOverrides, categories, now);
   const catById = (id) => categories.find((c) => c.id === id);
   const recent = [...transactions].sort((a, b) => b.ts - a.ts).slice(0, 3);
@@ -176,15 +177,24 @@ export default function Dashboard({
     () => categoryStats(transactions, categories, bounds.start, bounds.end),
     [transactions, categories, bounds.start, bounds.end]
   );
+  // The sparkline follows the range switcher: one point per day on Week, per
+  // week on Month / 3 Months, per month on 1 Year.
   const catSeries = useMemo(
-    () => categorySeries(transactions, categories.map((c) => c.id), settings, now, 8),
-    [transactions, categories, settings.weekStartDay]
+    () => categorySeries(transactions, categories.map((c) => c.id), mode, settings, now),
+    [transactions, categories, mode, settings.weekStartDay]
   );
   const tod = useMemo(
     () => timeOfDay(transactions, bounds.start, bounds.end),
     [transactions, bounds.start, bounds.end]
   );
   const rangeOver = rangeTotal - rangeBudget;
+
+  const ledger = useMemo(
+    () => savingsLedger(transactions, settings, weekOverrides, now),
+    [transactions, settings, weekOverrides]
+  );
+  // The headline is all-time; the week-by-week chart honours the range switcher.
+  const ledgerRows = ledger.rows.filter((r) => r.start >= bounds.start && r.start < bounds.end);
 
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [draft, setDraft] = useState((allowance / 100).toString());
@@ -334,8 +344,11 @@ export default function Dashboard({
             <Tile label="Avg / spend day" value={formatMoney(avg, symbol)} sub="this week" />
             <Tile label="This month" value={formatMoney(month, symbol)} sub="all weeks" />
             <Tile label="No-spend days" value={`${noSpend}`} sub="this week" />
-            <Tile label="Saved so far" value={formatMoney(saved.total, symbol)}
-              sub={`${saved.weeks} week${saved.weeks === 1 ? "" : "s"}`} subColor="#5B8C5A" />
+            <Tile label="Net saved" value={formatMoney(ledger.net, symbol)}
+              sub={`${ledger.weeks} week${ledger.weeks === 1 ? "" : "s"} · see Saved`}
+              accent={ledger.net >= 0 ? undefined : DANGER}
+              subColor={ledger.net >= 0 ? "#5B8C5A" : DANGER}
+              onClick={() => setTab("saved")} />
             <Tile label="Biggest spend" value={big ? formatMoney(big.amount, symbol) : "—"}
               sub={big ? `${catById(big.categoryId)?.icon || "💸"} ${big.note || catById(big.categoryId)?.name || ""}` : "nothing yet"} />
           </div>
@@ -441,9 +454,9 @@ export default function Dashboard({
             </p>
             <CategoryDetail
               stats={catStats}
-              series={catSeries}
+              series={catSeries.series}
+              seriesLabel={catSeries.label}
               symbol={symbol}
-              showSpark={mode !== "year"}
             />
           </section>
 
@@ -547,6 +560,19 @@ export default function Dashboard({
                 sub={catStats.count ? `avg ${formatMoney(Math.round(catStats.total / catStats.count), symbol)}` : "none yet"} />
             </div>
           </section>
+        </>
+      )}
+
+      {tab === "saved" && (
+        <>
+          <RangeTabs mode={mode} setMode={setMode} />
+          <SavingsView
+            ledger={ledger}
+            rangeRows={ledgerRows}
+            rangeLabel={bounds.label}
+            symbol={symbol}
+            card={card}
+          />
         </>
       )}
 

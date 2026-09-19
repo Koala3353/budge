@@ -23,7 +23,7 @@ function Spark({ series, color }) {
  * its share, how many purchases made it up, the average and largest purchase,
  * an 8-week shape, and the direction of travel within the range.
  */
-export default function CategoryDetail({ stats, series, symbol, showSpark }) {
+export default function CategoryDetail({ stats, series, seriesLabel, symbol }) {
   const { rows, total, count } = stats;
 
   if (!rows.length) {
@@ -80,7 +80,7 @@ export default function CategoryDetail({ stats, series, symbol, showSpark }) {
                 {Math.abs(r.change)}%
               </span>
             )}
-            {showSpark && series?.[r.categoryId] && (
+            {series?.[r.categoryId] && (
               <Spark series={series[r.categoryId]} color={r.color} />
             )}
           </div>
@@ -90,7 +90,7 @@ export default function CategoryDetail({ stats, series, symbol, showSpark }) {
       <p className="border-t border-gray-100 pt-3 font-mono text-xs text-gray-500 dark:border-gray-800 dark:text-gray-400">
         {formatMoney(total, symbol)} across {count} purchase{count === 1 ? "" : "s"} ·{" "}
         {rows.length} categor{rows.length === 1 ? "y" : "ies"}
-        {showSpark && <span className="ml-1">· line = last 8 weeks</span>}
+        {seriesLabel && <span>{" · "}line = {seriesLabel}</span>}
       </p>
     </div>
   );
