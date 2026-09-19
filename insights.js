@@ -81,36 +81,55 @@ export function noSpendDays(transactions, settings, now = Date.now()) {
 }
 
 /**
- * Average spend per weekday over the weeks you've actually been using the app
- * (up to the last `weeks` weeks). A weekday slot only counts toward its average
- * if that day falls on/after your first-ever transaction and on/before today —
- * so calendar weeks before you started logging don't dilute the average with
- * fake ₱0 days. A real no-spend day inside your active range still counts as 0.
+ * Average spend per weekday across a range.
+ *
+ * Only days you ACTUALLY SPENT ON count toward a weekday's average. A ₱0
+ * Wednesday almost always means no classes that day, not a cheap Wednesday —
+ * averaging those in would drag every weekday toward zero and say more about
+ * your timetable than your spending. A weekday you have never spent on is left
+ * out of the result entirely rather than drawn as an empty bar.
+ *
+ * Returns rows in week order (starting from the user's week-start day).
  */
-export function dowHeatmap(transactions, settings, now = Date.now(), weeks = 4) {
+export function dowHeatmap(transactions, settings, start, end) {
   const wsd = settings.weekStartDay;
   const totals = Array(7).fill(0);
-  const counts = Array(7).fill(0);
-  const cur = getWeekRange(now, wsd);
-  const earliest = transactions.length ? Math.min(...transactions.map((t) => t.ts)) : now;
-  const firstDay = startOfDay(earliest);
-  const weeksWithData = new Set();
-  for (let w = 0; w < weeks; w++) {
-    const r = getWeekRange(cur.start - w * 7 * DAY, wsd);
-    if (r.end <= firstDay) continue; // whole week predates any data
-    for (let off = 0; off < 7; off++) {
-      const ds = r.start + off * DAY;
-      if (ds > now) continue; // hasn't happened yet
-      if (ds + DAY <= firstDay) continue; // before your first log
-      totals[off] += sum(transactions.filter((t) => t.ts >= ds && t.ts < ds + DAY));
-      counts[off] += 1;
-      weeksWithData.add(r.start);
-    }
+  const days = Array(7).fill(0);
+
+  // Collapse to one entry per calendar day first; a day only exists here if
+  // something was spent on it, so zero-spend days can never enter the average.
+  const byDay = new Map();
+  for (const t of transactions) {
+    if (t.ts < start || t.ts >= end) continue;
+    const d = startOfDay(t.ts);
+    byDay.set(d, (byDay.get(d) || 0) + t.amount);
   }
-  const avg = totals.map((v, i) => (counts[i] ? Math.round(v / counts[i]) : 0));
-  const names = ["S", "M", "T", "W", "T", "F", "S"];
-  const labels = Array.from({ length: 7 }, (_, off) => names[(wsd + off) % 7]);
-  return { avg, labels, max: Math.max(1, ...avg), weeks: weeksWithData.size };
+  for (const [dayStart, amount] of byDay) {
+    if (amount <= 0) continue;
+    const off = (new Date(dayStart).getDay() - wsd + 7) % 7;
+    totals[off] += amount;
+    days[off] += 1;
+  }
+
+  // Full short names, not initials: with the unspent weekdays removed, a bare
+  // "T" next to another "T" is genuinely ambiguous.
+  const names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const rows = [];
+  for (let off = 0; off < 7; off++) {
+    if (!days[off]) continue; // never spent on this weekday in this range
+    rows.push({
+      off,
+      label: names[(wsd + off) % 7],
+      avg: Math.round(totals[off] / days[off]),
+      days: days[off],
+      total: totals[off],
+    });
+  }
+  return {
+    rows,
+    max: Math.max(1, ...rows.map((r) => r.avg)),
+    spendingDays: byDay.size,
+  };
 }
 
 /** Top category this week vs its average over the previous `weeks` weeks. */

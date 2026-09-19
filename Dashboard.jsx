@@ -157,7 +157,7 @@ export default function Dashboard({
   const big = biggest(weekTx);
   const month = monthTotal(transactions, now);
   const noSpend = noSpendDays(transactions, settings, now);
-  const heat = dowHeatmap(transactions, settings, now);
+
   const trend = categoryTrend(transactions, categories, settings, now);
   const stk = streaks(transactions, settings, weekOverrides, now);
   const recap = lastWeekRecap(transactions, settings, weekOverrides, categories, now);
@@ -186,6 +186,10 @@ export default function Dashboard({
   const tod = useMemo(
     () => timeOfDay(transactions, bounds.start, bounds.end),
     [transactions, bounds.start, bounds.end]
+  );
+  const heat = useMemo(
+    () => dowHeatmap(transactions, settings, bounds.start, bounds.end),
+    [transactions, settings.weekStartDay, bounds.start, bounds.end]
   );
   const rangeOver = rangeTotal - rangeBudget;
 
@@ -498,42 +502,46 @@ export default function Dashboard({
             </div>
           </section>
 
-          {/* Spend by day — avg per weekday */}
+          {/* Spend by day — avg per weekday, over the selected range */}
           <section className={`${card} mb-4 p-5`}>
             <h2 className="mb-1 text-base font-bold text-gray-900 dark:text-gray-50">Spend by day</h2>
-            <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">Which weekdays you spend the most.</p>
-            {heat.avg.filter((v) => v > 0).length < 2 ? (
+            <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+              Average of the days you actually spent · {bounds.label}
+            </p>
+            {heat.rows.length < 2 ? (
               <div className="rounded-2xl bg-gray-50 px-4 py-6 text-center text-sm text-gray-500 dark:bg-white/5 dark:text-gray-400">
                 Keep logging across more days — your weekly pattern shows up here.
               </div>
             ) : (
               <>
                 <div className="flex items-end gap-2" style={{ height: 132 }}>
-                  {heat.avg.map((v, i) => {
-                    const h = heat.max > 0 ? (v / heat.max) * 100 : 0;
-                    const isMax = v > 0 && v === heat.max;
+                  {heat.rows.map((r) => {
+                    const h = (r.avg / heat.max) * 100;
+                    const isMax = r.avg === heat.max;
                     return (
-                      <div key={i} title={`${heat.labels[i]}: ${formatMoney(v, symbol)} avg`}
-                        className="flex h-full flex-1 flex-col items-center justify-end">
-                        {v > 0 && (
-                          <span
-                            className="mb-1 whitespace-nowrap font-mono text-[10px] font-semibold tabular-nums"
-                            style={{ color: isMax ? "#D97706" : "#5E6E63" }}
-                          >
-                            {formatMoney(v, symbol)}
-                          </span>
-                        )}
+                      <div
+                        key={r.off}
+                        title={`${r.label}: ${formatMoney(r.avg, symbol)} average across ${r.days} spending day${r.days === 1 ? "" : "s"}`}
+                        className="flex h-full flex-1 flex-col items-center justify-end"
+                      >
+                        <span
+                          className="mb-1 whitespace-nowrap font-mono text-[10px] font-semibold tabular-nums"
+                          style={{ color: isMax ? "#D97706" : "#5E6E63" }}
+                        >
+                          {formatMoney(r.avg, symbol)}
+                        </span>
                         <div className="w-full rounded-t-md transition-all duration-500" style={{
-                          height: `${v > 0 ? Math.max(h, 8) : 4}%`,
-                          backgroundColor: v > 0 ? (isMax ? "#F59E0B" : "#5B8C5A") : "rgba(148,163,184,0.22)",
+                          height: `${Math.max(h, 8)}%`,
+                          backgroundColor: isMax ? "#F59E0B" : "#5B8C5A",
                         }} />
-                        <span className="mt-1.5 text-[11px] font-semibold text-gray-500 dark:text-gray-400">{heat.labels[i]}</span>
+                        <span className="mt-1.5 text-[11px] font-semibold text-gray-500 dark:text-gray-400">{r.label}</span>
                       </div>
                     );
                   })}
                 </div>
                 <p className="mt-2 font-mono text-xs text-gray-500 dark:text-gray-400">
-                  avg per weekday · {heat.weeks <= 1 ? "1 week" : `last ${heat.weeks} weeks`} of data
+                  {heat.spendingDays} spending day{heat.spendingDays === 1 ? "" : "s"} ·
+                  {" "}days with nothing logged are left out
                 </p>
               </>
             )}
