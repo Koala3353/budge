@@ -154,16 +154,32 @@ export function computeHistory(transactions, mode, settings, weekOverrides, now 
     return { buckets, refLine: null };
   }
 
-  // year: last 12 calendar months
+  // year: last 12 calendar months. A month's budget is the sum of the budgets of
+  // the weeks that START in it, so per-week overrides carry through here too.
+  const monthAllowance = (mStart, mEnd) => {
+    let total = 0;
+    let r = getWeekRange(mStart, wsd);
+    if (r.start < mStart) r = getWeekRange(r.start + 7 * DAY, wsd);
+    let guard = 0;
+    while (r.start < mEnd && guard++ < 10) {
+      total += getAllowanceForWeek(weekKey(r.start, wsd), settings, weekOverrides);
+      r = getWeekRange(r.start + 7 * DAY, wsd);
+    }
+    return total;
+  };
+
   const base = new Date(now);
   for (let i = 11; i >= 0; i--) {
     const m = new Date(base.getFullYear(), base.getMonth() - i, 1);
     const mStart = m.getTime();
     const mEnd = new Date(m.getFullYear(), m.getMonth() + 1, 1).getTime();
+    const spent = sumBetween(mStart, mEnd);
+    const allowance = monthAllowance(mStart, mEnd);
     buckets.push({
       label: m.toLocaleDateString("en-US", { month: "short" }),
-      spent: sumBetween(mStart, mEnd),
-      over: false,
+      spent,
+      allowance,
+      over: spent > allowance,
     });
   }
   return { buckets, refLine: null };

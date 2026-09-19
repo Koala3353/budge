@@ -204,3 +204,131 @@ export function lastWeekRecap(transactions, settings, overrides, categories, now
     count: t.length,
   };
 }
+
+// --- Dashboard views: range bounds, time of day, per-category series ---------
+
+/**
+ * Start/end (end exclusive) covered by a dashboard range mode. Deliberately
+ * matches the buckets computeHistory() builds, so the Categories tab and the
+ * trend chart are always describing the same span of time.
+ */
+export function rangeBounds(mode, settings, now = Date.now()) {
+  const wsd = settings.weekStartDay;
+  const cur = getWeekRange(now, wsd);
+  if (mode === "week") return { start: cur.start, end: cur.end, label: "this week" };
+  if (mode === "month" || mode === "3m") {
+    const back = mode === "month" ? 4 : 12;
+    const first = getWeekRange(cur.start - back * 7 * DAY, wsd);
+    return { start: first.start, end: cur.end, label: `last ${back + 1} weeks` };
+  }
+  const d = new Date(now);
+  return {
+    start: new Date(d.getFullYear(), d.getMonth() - 11, 1).getTime(),
+    end: new Date(d.getFullYear(), d.getMonth() + 1, 1).getTime(),
+    label: "last 12 months",
+  };
+}
+
+/** Total budget across a range — the sum of the budgets of the weeks inside it. */
+export function budgetForRange(settings, overrides, start, end) {
+  const wsd = settings.weekStartDay;
+  let total = 0;
+  let r = getWeekRange(start, wsd);
+  let guard = 0;
+  while (r.start < end && guard++ < 120) {
+    total += getAllowanceForWeek(weekKey(r.start, wsd), settings, overrides);
+    r = getWeekRange(r.start + 7 * DAY, wsd);
+  }
+  return total;
+}
+
+// Blocks chosen around a student's day, not clock quarters. Evening absorbs the
+// small hours (a 1am purchase belongs to the night before, not to "morning").
+const TIME_BLOCKS = [
+  { key: "morning", label: "Morning", hint: "5–11am", from: 5, to: 11, icon: "🌅" },
+  { key: "midday", label: "Midday", hint: "11am–2pm", from: 11, to: 14, icon: "🍜" },
+  { key: "afternoon", label: "Afternoon", hint: "2–6pm", from: 14, to: 18, icon: "🌤" },
+  { key: "evening", label: "Evening", hint: "6pm–5am", from: 18, to: 29, icon: "🌙" },
+];
+
+/** Spend split across four time-of-day blocks within [start, end). */
+export function timeOfDay(transactions, start, end) {
+  const rows = TIME_BLOCKS.map((b) => ({ ...b, amount: 0, count: 0 }));
+  for (const t of transactions) {
+    if (t.ts < start || t.ts >= end) continue;
+    const h = new Date(t.ts).getHours();
+    const hh = h < 5 ? h + 24 : h; // small hours roll into the previous evening
+    const row = rows.find((b) => hh >= b.from && hh < b.to) || rows[3];
+    row.amount += t.amount;
+    row.count += 1;
+  }
+  const total = rows.reduce((s, r) => s + r.amount, 0);
+  return {
+    rows,
+    total,
+    max: Math.max(1, ...rows.map((r) => r.amount)),
+    top: total > 0 ? rows.reduce((m, r) => (r.amount > m.amount ? r : m)) : null,
+  };
+}
+
+/**
+ * Weekly totals per category for the last `weeks` weeks (oldest first), used to
+ * draw a sparkline beside each category row. Returns { [categoryId]: number[] }.
+ */
+export function categorySeries(transactions, categoryIds, settings, now = Date.now(), weeks = 8) {
+  const wsd = settings.weekStartDay;
+  const cur = getWeekRange(now, wsd);
+  const out = {};
+  for (const id of categoryIds) out[id] = [];
+  for (let i = weeks - 1; i >= 0; i--) {
+    const r = getWeekRange(cur.start - i * 7 * DAY, wsd);
+    const tx = weekTransactions(transactions, r);
+    for (const id of categoryIds) {
+      out[id].push(tx.reduce((s, t) => (t.categoryId === id ? s + t.amount : s), 0));
+    }
+  }
+  return out;
+}
+
+/**
+ * Per-category stats over a range: total, share, transaction count, average
+ * per purchase, and the change vs the first half of the same range. Sorted by
+ * amount, so the caller can render it straight down the page.
+ */
+export function categoryStats(transactions, categories, start, end) {
+  const mid = start + (end - start) / 2;
+  const acc = new Map();
+  let total = 0;
+  for (const t of transactions) {
+    if (t.ts < start || t.ts >= end) continue;
+    const a = acc.get(t.categoryId) || { amount: 0, count: 0, first: 0, second: 0, max: 0 };
+    a.amount += t.amount;
+    a.count += 1;
+    a.max = Math.max(a.max, t.amount);
+    if (t.ts < mid) a.first += t.amount;
+    else a.second += t.amount;
+    acc.set(t.categoryId, a);
+    total += t.amount;
+  }
+  const rows = [];
+  for (const [categoryId, a] of acc) {
+    const cat = categories.find((c) => c.id === categoryId) || {
+      name: "Uncategorized", color: "#6B7280", icon: "❔",
+    };
+    rows.push({
+      categoryId,
+      name: cat.name,
+      color: cat.color,
+      icon: cat.icon,
+      amount: a.amount,
+      count: a.count,
+      avg: Math.round(a.amount / a.count),
+      biggest: a.max,
+      pct: total > 0 ? a.amount / total : 0,
+      // null when there's no earlier half to compare against
+      change: a.first > 0 ? Math.round(((a.second - a.first) / a.first) * 100) : null,
+    });
+  }
+  rows.sort((a, b) => b.amount - a.amount);
+  return { rows, total, count: rows.reduce((s, r) => s + r.count, 0) };
+}

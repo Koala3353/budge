@@ -11,7 +11,8 @@ const OVER = "#EF4444";
  *      (tap any bar to select; the most recent bar is selected by default).
  *   2. Compact value labels sit above the bars — on every bar when there's
  *      room (≤ 8), otherwise just above the selected bar.
- * A dashed "budget" line contextualises the red over-budget bars.
+ * A dashed step line shows each bucket's OWN budget (not this week's), so a
+ * week you adjusted reads as its own step rather than a flat line.
  * `data` = { buckets: [{label, spent, allowance?, over?}], refLine?, refLabel? }
  */
 export default function HistoryChart({ data, symbol }) {
@@ -33,22 +34,37 @@ export default function HistoryChart({ data, symbol }) {
   const chartH = VBH - TOP - AXIS_B;
   const chartW = VBW - AXIS_W;
 
-  // Most-recent weekly budget (if the buckets carry one) → a single reference
-  // line so the red bars read as "over this".
-  const budget = [...buckets].reverse().find((b) => b.allowance != null)?.allowance ?? null;
+  const hasBudget = buckets.some((b) => b.allowance != null);
 
   const max = Math.max(
     1,
     ...buckets.map((b) => Math.max(b.spent, b.allowance || 0)),
-    refLine || 0,
-    budget || 0
+    refLine || 0
   );
   const slot = chartW / n;
   const bw = Math.min(slot * 0.62, 30);
   const showEveryValue = n <= 8; // sparse enough to label every bar
   const labelStep = n > 9 ? Math.ceil(n / 9) : 1; // thin x-axis ticks if crowded
   const refY = refLine != null ? TOP + chartH - (refLine / max) * chartH : null;
-  const budgetY = budget != null ? TOP + chartH - (budget / max) * chartH : null;
+  const yOf = (cents) => TOP + chartH - (cents / max) * chartH;
+
+  // The budget reference is a STEP line, not one flat value: each bucket is drawn
+  // at the allowance that actually applied to that week/month, so a week you
+  // adjusted (class suspended, etc.) shows its own lower step.
+  const budgetPath = (() => {
+    if (!hasBudget) return "";
+    let d = "";
+    buckets.forEach((b, i) => {
+      if (b.allowance == null) return;
+      const y = yOf(b.allowance);
+      const x0 = AXIS_W + i * slot;
+      const prev = buckets[i - 1];
+      if (i === 0 || prev?.allowance == null) d += `M ${x0} ${y} `;
+      else if (prev.allowance !== b.allowance) d += `L ${x0} ${y} `; // vertical riser
+      d += `L ${x0 + slot} ${y} `;
+    });
+    return d.trim();
+  })();
 
   // Compact peso label (e.g. ₱2k, ₱1.5k, ₱500) for axis + on-bar values.
   const compact = (cents) => {
@@ -120,23 +136,17 @@ export default function HistoryChart({ data, symbol }) {
           );
         })}
 
-        {/* Budget reference line (weekly views) */}
-        {budgetY != null && (
-          <>
-            <line
-              x1={AXIS_W}
-              x2={VBW}
-              y1={budgetY}
-              y2={budgetY}
-              stroke={OVER}
-              strokeWidth="1"
-              strokeDasharray="2 3"
-              opacity="0.7"
-            />
-            <text x={VBW} y={budgetY - 4} textAnchor="end" style={{ fontSize: 9, fill: OVER }}>
-              budget {compact(budget)}
-            </text>
-          </>
+        {/* Budget reference — one step per bucket, at that bucket's own budget */}
+        {budgetPath && (
+          <path
+            d={budgetPath}
+            fill="none"
+            stroke={OVER}
+            strokeWidth="1.5"
+            strokeDasharray="2 3"
+            strokeLinejoin="round"
+            opacity="0.75"
+          />
         )}
 
         {/* Reference line (e.g. daily target on the Week view) */}

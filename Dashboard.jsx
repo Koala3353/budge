@@ -22,6 +22,11 @@ import {
   streaks,
   leftover,
   lastWeekRecap,
+  rangeBounds,
+  budgetForRange,
+  timeOfDay,
+  categorySeries,
+  categoryStats,
 } from "./insights.js";
 import ProgressRing from "./ProgressRing.jsx";
 import RingAmount from "./RingAmount.jsx";
@@ -29,6 +34,8 @@ import SyncStatus from "./SyncStatus.jsx";
 import ShareSheet from "./ShareSheet.jsx";
 import CategoryBreakdown from "./CategoryBreakdown.jsx";
 import HistoryChart from "./HistoryChart.jsx";
+import TimeOfDayChart from "./TimeOfDayChart.jsx";
+import CategoryDetail from "./CategoryDetail.jsx";
 import Modal from "./Modal.jsx";
 import { PlusIcon } from "./icons.jsx";
 
@@ -42,8 +49,36 @@ const RANGES = [
   { key: "year", label: "1 Year" },
 ];
 
+const TABS = [
+  { key: "overview", label: "Overview" },
+  { key: "categories", label: "Categories" },
+  { key: "trends", label: "Trends" },
+];
+
 const card =
   "rounded-3xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm";
+
+/** The shared range switcher. Categories and Trends read the same selection. */
+function RangeTabs({ mode, setMode }) {
+  return (
+    <div className="mb-4 flex gap-1 rounded-2xl bg-gray-100 p-1 dark:bg-white/5">
+      {RANGES.map((r) => (
+        <button
+          key={r.key}
+          onClick={() => setMode(r.key)}
+          aria-pressed={mode === r.key}
+          className={`flex-1 rounded-xl py-1.5 text-xs font-semibold transition ${
+            mode === r.key
+              ? "bg-white text-gray-900 shadow-sm dark:bg-gray-800 dark:text-gray-50"
+              : "text-gray-500 dark:text-gray-400"
+          }`}
+        >
+          {r.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 function Tile({ label, value, sub, subColor, accent, onClick, action }) {
   const Comp = onClick ? "button" : "div";
@@ -128,9 +163,28 @@ export default function Dashboard({
   const catById = (id) => categories.find((c) => c.id === id);
   const recent = [...transactions].sort((a, b) => b.ts - a.ts).slice(0, 3);
 
+  const [tab, setTab] = useState("overview");
   const [mode, setMode] = useState("month");
   const history = computeHistory(transactions, mode, settings, weekOverrides, now);
   const rangeTotal = history.buckets.reduce((s, b) => s + b.spent, 0);
+
+  // Everything the Categories / Trends tabs show is scoped to the SAME range as
+  // the trend chart, so switching "Month → 1 Year" moves all three views at once.
+  const bounds = rangeBounds(mode, settings, now);
+  const rangeBudget = budgetForRange(settings, weekOverrides, bounds.start, bounds.end);
+  const catStats = useMemo(
+    () => categoryStats(transactions, categories, bounds.start, bounds.end),
+    [transactions, categories, bounds.start, bounds.end]
+  );
+  const catSeries = useMemo(
+    () => categorySeries(transactions, categories.map((c) => c.id), settings, now, 8),
+    [transactions, categories, settings.weekStartDay]
+  );
+  const tod = useMemo(
+    () => timeOfDay(transactions, bounds.start, bounds.end),
+    [transactions, bounds.start, bounds.end]
+  );
+  const rangeOver = rangeTotal - rangeBudget;
 
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [draft, setDraft] = useState((allowance / 100).toString());
@@ -182,219 +236,319 @@ export default function Dashboard({
         </div>
       </header>
 
-      {/* gentle reminder if nothing logged today */}
-      {today === 0 && transactions.length > 0 && !hideNudge && (
-        <div className="mb-4 flex items-center justify-between rounded-2xl bg-matcha/10 px-4 py-3">
-          <span className="text-sm font-medium text-matcha">📝 Nothing logged today — got any spends?</span>
-          <button onClick={() => setHideNudge(true)} className="text-matcha/70 active:opacity-60">✕</button>
-        </div>
-      )}
-
-      {/* HERO */}
-      <section className={`${card} mb-4 p-6`}>
-        <div className="mb-4 flex items-center justify-between">
-          <div className="text-sm font-medium text-gray-500 dark:text-gray-400">
-            Budget {formatMoney(allowance, symbol)}
-            {hasOverride && <span className="ml-1 text-matcha">· adjusted</span>}
-          </div>
+      {/* Sub-tabs — the dashboard is three short pages, not one long one */}
+      <div
+        role="tablist"
+        aria-label="Dashboard views"
+        className="mb-4 flex gap-1 rounded-2xl bg-gray-100 p-1 dark:bg-white/5"
+      >
+        {TABS.map((t) => (
           <button
-            onClick={() => { setDraft((allowance / 100).toString()); setAdjustOpen(true); }}
-            className="rounded-full bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-700 active:scale-95 dark:bg-white/5 dark:text-gray-200"
+            key={t.key}
+            role="tab"
+            aria-selected={tab === t.key}
+            onClick={() => setTab(t.key)}
+            className={`flex-1 rounded-xl py-2 text-sm font-semibold transition ${
+              tab === t.key
+                ? "bg-white text-gray-900 shadow-sm dark:bg-gray-800 dark:text-gray-50"
+                : "text-gray-500 dark:text-gray-400"
+            }`}
           >
-            Adjust
+            {t.label}
           </button>
-        </div>
-
-        <div className="flex flex-col items-center">
-          <ProgressRing pct={pct} isOver={isOver}>
-            {isOver ? (
-              <>
-                <RingAmount cents={remaining} symbol={symbol} max={48} min={22} className="font-extrabold tracking-tight" style={{ color: DANGER }} />
-                <span className="mt-1 text-xs font-semibold uppercase tracking-wide" style={{ color: DANGER }}>over budget</span>
-              </>
-            ) : (
-              <>
-                <RingAmount cents={remaining} symbol={symbol} max={60} min={24} className="font-extrabold tracking-tight text-gray-900 dark:text-gray-50" />
-                <span className="mt-1 text-xs font-medium text-gray-500 dark:text-gray-400">left of {formatMoney(allowance, symbol)}</span>
-              </>
-            )}
-          </ProgressRing>
-
-          <div className="mt-5 w-full space-y-2">
-            {isOver ? (
-              <div className="rounded-2xl px-4 py-3 text-center text-sm font-medium" style={{ backgroundColor: DANGER + "1a", color: DANGER }}>
-                Over for now — let's reset next week 🌱
-              </div>
-            ) : (
-              <div className={`rounded-2xl px-4 py-3 text-center text-sm font-medium ${pct >= 0.8 ? "bg-amber-400/10 text-amber-600 dark:text-amber-400" : "bg-matcha/10 text-matcha"}`}>
-                Daily limit: <span className="font-bold">{formatMoney(dailyLimit, symbol)}/day</span> · {spendDaysLeft} spend day{spendDaysLeft === 1 ? "" : "s"} left
-              </div>
-            )}
-            {/* today + pace */}
-            <div className="flex items-center justify-between rounded-2xl bg-gray-50 px-4 py-2.5 text-sm dark:bg-white/5">
-              <span className="text-gray-500 dark:text-gray-400">
-                Today <span className="font-mono font-semibold text-gray-900 dark:text-gray-50">{formatMoney(today, symbol)}</span>
-              </span>
-              {!isOver && (
-                <span className="font-medium" style={{ color: paceDiff >= 0 ? "#5B8C5A" : "#F59E0B" }}>{paceText}</span>
-              )}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Stat tiles */}
-      <div className="mb-4 grid grid-cols-2 gap-3">
-        <Tile label="Spent this week" value={formatMoney(spent, symbol)}
-          sub={`${pctSpent}% · ${deltaText}`} subColor={lwd.hasPrev && lwd.delta > 0 ? "#F59E0B" : "#9CA3AF"} />
-        <Tile label="Spend days" value={`${spendDays} / wk`} sub={hasDaysOverride ? "this week" : "default"}
-          action="Edit" onClick={() => { setDaysDraft(spendDays); setDaysOpen(true); }} />
-        <Tile label="Projected end" value={formatMoney(projectedTotal, symbol)}
-          sub={projOver > 0 ? `${formatMoney(projOver, symbol)} over` : `${formatMoney(-projOver, symbol)} under`}
-          subColor={projOver > 0 ? "#EF4444" : "#5B8C5A"} />
-        <Tile label="Avg / spend day" value={formatMoney(avg, symbol)} sub="this week" />
-        <Tile label="This month" value={formatMoney(month, symbol)} sub="all weeks" />
-        <Tile label="No-spend days" value={`${noSpend}`} sub="this week" />
-        <Tile label="Saved so far" value={formatMoney(saved.total, symbol)}
-          sub={`${saved.weeks} week${saved.weeks === 1 ? "" : "s"}`} subColor="#5B8C5A" />
-        <Tile label="Biggest spend" value={big ? formatMoney(big.amount, symbol) : "—"}
-          sub={big ? `${catById(big.categoryId)?.icon || "💸"} ${big.note || catById(big.categoryId)?.name || ""}` : "nothing yet"} />
+        ))}
       </div>
 
-      {/* Category breakdown + trend */}
-      <section className={`${card} mb-4 p-5`}>
-        <div className="mb-1 flex items-baseline justify-between">
-          <h2 className="text-base font-bold text-gray-900 dark:text-gray-50">Expense by Category</h2>
-          {breakdown.top && (
-            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Top: {breakdown.top.icon} {breakdown.top.name}</span>
-          )}
-        </div>
-        {trend && trend.pct != null && (
-          <p className="mb-3 text-xs font-medium" style={{ color: trend.pct > 0 ? "#F59E0B" : "#5B8C5A" }}>
-            {trend.cat?.icon} {trend.cat?.name} {trend.pct >= 0 ? "↑" : "↓"}{Math.abs(trend.pct)}% vs 4-wk avg
-          </p>
-        )}
-        {isEmpty ? (
-          <div className="py-6 text-center">
-            <p className="text-sm text-gray-500 dark:text-gray-400">Nothing logged yet this week.</p>
-            <button onClick={onAdd} className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-matcha px-5 py-3 font-semibold text-white active:scale-95">
-              <PlusIcon size={20} /> Add an expense
-            </button>
-          </div>
-        ) : (
-          <CategoryBreakdown breakdown={breakdown} symbol={symbol} />
-        )}
-      </section>
-
-      {/* Spend by day — avg per weekday */}
-      <section className={`${card} mb-4 p-5`}>
-        <h2 className="mb-1 text-base font-bold text-gray-900 dark:text-gray-50">Spend by day</h2>
-        <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">Which weekdays you spend the most.</p>
-        {heat.avg.filter((v) => v > 0).length < 2 ? (
-          <div className="rounded-2xl bg-gray-50 px-4 py-6 text-center text-sm text-gray-500 dark:bg-white/5 dark:text-gray-400">
-            Keep logging across more days — your weekly pattern shows up here.
-          </div>
-        ) : (
-          <>
-            <div className="flex items-end gap-2" style={{ height: 132 }}>
-              {heat.avg.map((v, i) => {
-                const h = heat.max > 0 ? (v / heat.max) * 100 : 0;
-                const isMax = v > 0 && v === heat.max;
-                return (
-                  <div key={i} title={`${heat.labels[i]}: ${formatMoney(v, symbol)} avg`}
-                    className="flex h-full flex-1 flex-col items-center justify-end">
-                    {v > 0 && (
-                      <span
-                        className="mb-1 whitespace-nowrap font-mono text-[10px] font-semibold tabular-nums"
-                        style={{ color: isMax ? "#D97706" : "#5E6E63" }}
-                      >
-                        {formatMoney(v, symbol)}
-                      </span>
-                    )}
-                    <div className="w-full rounded-md transition-all duration-500" style={{
-                      height: `${v > 0 ? Math.max(h, 8) : 4}%`,
-                      backgroundColor: v > 0 ? (isMax ? "#F59E0B" : "#5B8C5A") : "rgba(148,163,184,0.22)",
-                    }} />
-                    <span className="mt-1.5 text-[11px] font-semibold text-gray-500 dark:text-gray-400">{heat.labels[i]}</span>
-                  </div>
-                );
-              })}
+      {tab === "overview" && (
+        <>
+          {/* gentle reminder if nothing logged today */}
+          {today === 0 && transactions.length > 0 && !hideNudge && (
+            <div className="mb-4 flex items-center justify-between rounded-2xl bg-matcha/10 px-4 py-3">
+              <span className="text-sm font-medium text-matcha">📝 Nothing logged today — got any spends?</span>
+              <button onClick={() => setHideNudge(true)} className="text-matcha/70 active:opacity-60">✕</button>
             </div>
-            <p className="mt-2 font-mono text-xs text-gray-400">
-              avg per weekday · {heat.weeks <= 1 ? "1 week" : `last ${heat.weeks} weeks`} of data
-            </p>
-          </>
-        )}
-      </section>
-
-      {/* Spending over time */}
-      <section className={`${card} mb-4 p-5`}>
-        <div className="mb-3 flex items-baseline justify-between">
-          <h2 className="text-base font-bold text-gray-900 dark:text-gray-50">Spending over time</h2>
-          <span className="font-mono text-sm font-medium text-gray-500 dark:text-gray-400">{formatMoney(rangeTotal, symbol)}</span>
-        </div>
-        <div className="mb-4 flex gap-1 rounded-2xl bg-gray-100 p-1 dark:bg-white/5">
-          {RANGES.map((r) => (
-            <button key={r.key} onClick={() => setMode(r.key)}
-              className={`flex-1 rounded-xl py-1.5 text-xs font-semibold transition ${mode === r.key ? "bg-white text-gray-900 shadow-sm dark:bg-gray-800 dark:text-gray-50" : "text-gray-500 dark:text-gray-400"}`}>
-              {r.label}
-            </button>
-          ))}
-        </div>
-        <HistoryChart data={history} symbol={symbol} />
-        <div className="mt-3 flex items-center gap-4 text-xs text-gray-400">
-          <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-sm bg-matcha" /> within budget</span>
-          <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: DANGER }} /> over budget</span>
-        </div>
-      </section>
-
-      {/* Last week recap + share */}
-      {recap && (
-        <section className={`${card} mb-4 p-5`}>
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-base font-bold text-gray-900 dark:text-gray-50">Last week recap</h2>
-            <button onClick={() => setShareOpen(true)} className="rounded-full bg-matcha/10 px-3 py-1.5 text-xs font-semibold text-matcha active:scale-95">Share</button>
-          </div>
-          <p className="text-sm text-gray-600 dark:text-gray-300">
-            Spent <span className="font-mono font-semibold text-gray-900 dark:text-gray-50">{formatMoney(recap.spent, symbol)}</span> of {formatMoney(recap.allowance, symbol)} —{" "}
-            <span className="font-semibold" style={{ color: recap.over > 0 ? "#EF4444" : "#5B8C5A" }}>
-              {recap.over > 0 ? `${formatMoney(recap.over, symbol)} over` : `${formatMoney(-recap.over, symbol)} under 🌱`}
-            </span>
-          </p>
-          {recap.top && (
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Top: {recap.top.icon} {recap.top.name} · {formatMoney(recap.topAmt, symbol)}</p>
           )}
-        </section>
+
+          {/* HERO */}
+          <section className={`${card} mb-4 p-6`}>
+            <div className="mb-4 flex items-center justify-between">
+              <div className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                Budget {formatMoney(allowance, symbol)}
+                {hasOverride && <span className="ml-1 text-matcha">· adjusted</span>}
+              </div>
+              <button
+                onClick={() => { setDraft((allowance / 100).toString()); setAdjustOpen(true); }}
+                className="rounded-full bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-700 active:scale-95 dark:bg-white/5 dark:text-gray-200"
+              >
+                Adjust
+              </button>
+            </div>
+
+            <div className="flex flex-col items-center">
+              <ProgressRing pct={pct} isOver={isOver}>
+                {isOver ? (
+                  <>
+                    <RingAmount cents={remaining} symbol={symbol} max={48} min={22} className="font-extrabold tracking-tight" style={{ color: DANGER }} />
+                    <span className="mt-1 text-xs font-semibold uppercase tracking-wide" style={{ color: DANGER }}>over budget</span>
+                  </>
+                ) : (
+                  <>
+                    <RingAmount cents={remaining} symbol={symbol} max={60} min={24} className="font-extrabold tracking-tight text-gray-900 dark:text-gray-50" />
+                    <span className="mt-1 text-xs font-medium text-gray-500 dark:text-gray-400">left of {formatMoney(allowance, symbol)}</span>
+                  </>
+                )}
+              </ProgressRing>
+
+              <div className="mt-5 w-full space-y-2">
+                {isOver ? (
+                  <div className="rounded-2xl px-4 py-3 text-center text-sm font-medium" style={{ backgroundColor: DANGER + "1a", color: DANGER }}>
+                    Over for now — let's reset next week 🌱
+                  </div>
+                ) : (
+                  <div className={`rounded-2xl px-4 py-3 text-center text-sm font-medium ${pct >= 0.8 ? "bg-amber-400/10 text-amber-600 dark:text-amber-400" : "bg-matcha/10 text-matcha"}`}>
+                    Daily limit: <span className="font-bold">{formatMoney(dailyLimit, symbol)}/day</span> · {spendDaysLeft} spend day{spendDaysLeft === 1 ? "" : "s"} left
+                  </div>
+                )}
+                {/* today + pace */}
+                <div className="flex items-center justify-between rounded-2xl bg-gray-50 px-4 py-2.5 text-sm dark:bg-white/5">
+                  <span className="text-gray-500 dark:text-gray-400">
+                    Today <span className="font-mono font-semibold text-gray-900 dark:text-gray-50">{formatMoney(today, symbol)}</span>
+                  </span>
+                  {!isOver && (
+                    <span className="font-medium" style={{ color: paceDiff >= 0 ? "#5B8C5A" : "#F59E0B" }}>{paceText}</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Stat tiles */}
+          <div className="mb-4 grid grid-cols-2 gap-3">
+            <Tile label="Spent this week" value={formatMoney(spent, symbol)}
+              sub={`${pctSpent}% · ${deltaText}`} subColor={lwd.hasPrev && lwd.delta > 0 ? "#F59E0B" : "#9CA3AF"} />
+            <Tile label="Spend days" value={`${spendDays} / wk`} sub={hasDaysOverride ? "this week" : "default"}
+              action="Edit" onClick={() => { setDaysDraft(spendDays); setDaysOpen(true); }} />
+            <Tile label="Projected end" value={formatMoney(projectedTotal, symbol)}
+              sub={projOver > 0 ? `${formatMoney(projOver, symbol)} over` : `${formatMoney(-projOver, symbol)} under`}
+              subColor={projOver > 0 ? "#EF4444" : "#5B8C5A"} />
+            <Tile label="Avg / spend day" value={formatMoney(avg, symbol)} sub="this week" />
+            <Tile label="This month" value={formatMoney(month, symbol)} sub="all weeks" />
+            <Tile label="No-spend days" value={`${noSpend}`} sub="this week" />
+            <Tile label="Saved so far" value={formatMoney(saved.total, symbol)}
+              sub={`${saved.weeks} week${saved.weeks === 1 ? "" : "s"}`} subColor="#5B8C5A" />
+            <Tile label="Biggest spend" value={big ? formatMoney(big.amount, symbol) : "—"}
+              sub={big ? `${catById(big.categoryId)?.icon || "💸"} ${big.note || catById(big.categoryId)?.name || ""}` : "nothing yet"} />
+          </div>
+
+          {/* This week's categories, with the full view one tap away */}
+          <section className={`${card} mb-4 p-5`}>
+            <div className="mb-1 flex items-baseline justify-between">
+              <h2 className="text-base font-bold text-gray-900 dark:text-gray-50">Expense by Category</h2>
+              {breakdown.top && (
+                <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Top: {breakdown.top.icon} {breakdown.top.name}</span>
+              )}
+            </div>
+            {trend && trend.pct != null && (
+              <p className="mb-3 text-xs font-medium" style={{ color: trend.pct > 0 ? "#F59E0B" : "#5B8C5A" }}>
+                {trend.cat?.icon} {trend.cat?.name} {trend.pct >= 0 ? "↑" : "↓"}{Math.abs(trend.pct)}% vs 4-wk avg
+              </p>
+            )}
+            {isEmpty ? (
+              <div className="py-6 text-center">
+                <p className="text-sm text-gray-500 dark:text-gray-400">Nothing logged yet this week.</p>
+                <button onClick={onAdd} className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-matcha px-5 py-3 font-semibold text-white active:scale-95">
+                  <PlusIcon size={20} /> Add an expense
+                </button>
+              </div>
+            ) : (
+              <>
+                <CategoryBreakdown breakdown={breakdown} symbol={symbol} />
+                <button
+                  onClick={() => setTab("categories")}
+                  className="mt-4 w-full rounded-2xl bg-gray-50 py-2.5 text-sm font-semibold text-matcha active:scale-[0.99] dark:bg-white/5"
+                >
+                  See every category →
+                </button>
+              </>
+            )}
+          </section>
+
+          {/* Last week recap + share */}
+          {recap && (
+            <section className={`${card} mb-4 p-5`}>
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-base font-bold text-gray-900 dark:text-gray-50">Last week recap</h2>
+                <button onClick={() => setShareOpen(true)} className="rounded-full bg-matcha/10 px-3 py-1.5 text-xs font-semibold text-matcha active:scale-95">Share</button>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                Spent <span className="font-mono font-semibold text-gray-900 dark:text-gray-50">{formatMoney(recap.spent, symbol)}</span> of {formatMoney(recap.allowance, symbol)} —{" "}
+                <span className="font-semibold" style={{ color: recap.over > 0 ? "#EF4444" : "#5B8C5A" }}>
+                  {recap.over > 0 ? `${formatMoney(recap.over, symbol)} over` : `${formatMoney(-recap.over, symbol)} under 🌱`}
+                </span>
+              </p>
+              {recap.top && (
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Top: {recap.top.icon} {recap.top.name} · {formatMoney(recap.topAmt, symbol)}</p>
+              )}
+            </section>
+          )}
+
+          {/* Recent */}
+          <section className={`${card} p-5`}>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-base font-bold text-gray-900 dark:text-gray-50">Recent</h2>
+              <button onClick={() => onViewAll?.()} className="text-sm font-semibold text-matcha active:opacity-70">View all</button>
+            </div>
+            {recent.length === 0 ? (
+              <p className="py-4 text-center text-sm text-gray-500 dark:text-gray-400">No transactions yet.</p>
+            ) : (
+              <div className="space-y-1">
+                {recent.map((t) => {
+                  const c = catById(t.categoryId);
+                  return (
+                    <div key={t.id} className="flex items-center gap-3 py-2">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-lg" style={{ backgroundColor: (c?.color || "#888") + "22" }}>
+                        {c?.icon || "💸"}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-gray-900 dark:text-gray-50">{t.note || c?.name || "Expense"}</p>
+                        <p className="text-xs text-gray-400">{c?.name || "Uncategorized"} · {formatTime(t.ts)}</p>
+                      </div>
+                      <span className="shrink-0 font-mono text-sm font-semibold tabular-nums text-gray-900 dark:text-gray-50">-{formatMoney(t.amount, symbol)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        </>
       )}
 
-      {/* Recent */}
-      <section className={`${card} p-5`}>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-base font-bold text-gray-900 dark:text-gray-50">Recent</h2>
-          <button onClick={() => onViewAll?.()} className="text-sm font-semibold text-matcha active:opacity-70">View all</button>
-        </div>
-        {recent.length === 0 ? (
-          <p className="py-4 text-center text-sm text-gray-500 dark:text-gray-400">No transactions yet.</p>
-        ) : (
-          <div className="space-y-1">
-            {recent.map((t) => {
-              const c = catById(t.categoryId);
-              return (
-                <div key={t.id} className="flex items-center gap-3 py-2">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-lg" style={{ backgroundColor: (c?.color || "#888") + "22" }}>
-                    {c?.icon || "💸"}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-gray-900 dark:text-gray-50">{t.note || c?.name || "Expense"}</p>
-                    <p className="text-xs text-gray-400">{c?.name || "Uncategorized"} · {formatTime(t.ts)}</p>
-                  </div>
-                  <span className="shrink-0 font-mono text-sm font-semibold tabular-nums text-gray-900 dark:text-gray-50">-{formatMoney(t.amount, symbol)}</span>
+      {tab === "categories" && (
+        <>
+          <RangeTabs mode={mode} setMode={setMode} />
+
+          <section className={`${card} mb-4 p-5`}>
+            <div className="mb-1 flex items-baseline justify-between gap-2">
+              <h2 className="text-base font-bold text-gray-900 dark:text-gray-50">Where it goes</h2>
+              <span className="shrink-0 font-mono text-sm font-medium text-gray-500 dark:text-gray-400">
+                {formatMoney(catStats.total, symbol)}
+              </span>
+            </div>
+            <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">
+              {bounds.label} · {rangeOver > 0
+                ? `${formatMoney(rangeOver, symbol)} over a ${formatMoney(rangeBudget, symbol)} budget`
+                : `${formatMoney(-rangeOver, symbol)} under a ${formatMoney(rangeBudget, symbol)} budget`}
+            </p>
+            <CategoryDetail
+              stats={catStats}
+              series={catSeries}
+              symbol={symbol}
+              showSpark={mode !== "year"}
+            />
+          </section>
+
+          {trend && trend.pct != null && (
+            <section className={`${card} mb-4 p-5`}>
+              <h2 className="mb-1 text-base font-bold text-gray-900 dark:text-gray-50">Watch this one</h2>
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                {trend.cat?.icon} <span className="font-semibold">{trend.cat?.name}</span> is{" "}
+                <span className="font-semibold" style={{ color: trend.pct > 0 ? "#D97706" : "#5B8C5A" }}>
+                  {Math.abs(trend.pct)}% {trend.pct >= 0 ? "above" : "below"}
+                </span>{" "}
+                its 4-week average — {formatMoney(trend.thisAmt, symbol)} this week vs{" "}
+                {formatMoney(trend.avg, symbol)} typical.
+              </p>
+            </section>
+          )}
+        </>
+      )}
+
+      {tab === "trends" && (
+        <>
+          <RangeTabs mode={mode} setMode={setMode} />
+
+          {/* Spending over time */}
+          <section className={`${card} mb-4 p-5`}>
+            <div className="mb-1 flex items-baseline justify-between">
+              <h2 className="text-base font-bold text-gray-900 dark:text-gray-50">Spending over time</h2>
+              <span className="font-mono text-sm font-medium text-gray-500 dark:text-gray-400">{formatMoney(rangeTotal, symbol)}</span>
+            </div>
+            <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">Tap a bar to read it.</p>
+            <HistoryChart data={history} symbol={symbol} />
+            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-gray-500 dark:text-gray-400">
+              <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-sm bg-matcha" /> within budget</span>
+              <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: DANGER }} /> over budget</span>
+              <span className="flex items-center gap-1.5">
+                <svg width="14" height="6" aria-hidden="true"><line x1="0" y1="3" x2="14" y2="3" stroke={DANGER} strokeWidth="1.5" strokeDasharray="2 3" /></svg>
+                that period's budget
+              </span>
+            </div>
+          </section>
+
+          {/* Spend by day — avg per weekday */}
+          <section className={`${card} mb-4 p-5`}>
+            <h2 className="mb-1 text-base font-bold text-gray-900 dark:text-gray-50">Spend by day</h2>
+            <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">Which weekdays you spend the most.</p>
+            {heat.avg.filter((v) => v > 0).length < 2 ? (
+              <div className="rounded-2xl bg-gray-50 px-4 py-6 text-center text-sm text-gray-500 dark:bg-white/5 dark:text-gray-400">
+                Keep logging across more days — your weekly pattern shows up here.
+              </div>
+            ) : (
+              <>
+                <div className="flex items-end gap-2" style={{ height: 132 }}>
+                  {heat.avg.map((v, i) => {
+                    const h = heat.max > 0 ? (v / heat.max) * 100 : 0;
+                    const isMax = v > 0 && v === heat.max;
+                    return (
+                      <div key={i} title={`${heat.labels[i]}: ${formatMoney(v, symbol)} avg`}
+                        className="flex h-full flex-1 flex-col items-center justify-end">
+                        {v > 0 && (
+                          <span
+                            className="mb-1 whitespace-nowrap font-mono text-[10px] font-semibold tabular-nums"
+                            style={{ color: isMax ? "#D97706" : "#5E6E63" }}
+                          >
+                            {formatMoney(v, symbol)}
+                          </span>
+                        )}
+                        <div className="w-full rounded-t-md transition-all duration-500" style={{
+                          height: `${v > 0 ? Math.max(h, 8) : 4}%`,
+                          backgroundColor: v > 0 ? (isMax ? "#F59E0B" : "#5B8C5A") : "rgba(148,163,184,0.22)",
+                        }} />
+                        <span className="mt-1.5 text-[11px] font-semibold text-gray-500 dark:text-gray-400">{heat.labels[i]}</span>
+                      </div>
+                    );
+                  })}
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
+                <p className="mt-2 font-mono text-xs text-gray-500 dark:text-gray-400">
+                  avg per weekday · {heat.weeks <= 1 ? "1 week" : `last ${heat.weeks} weeks`} of data
+                </p>
+              </>
+            )}
+          </section>
+
+          {/* Time of day */}
+          <section className={`${card} mb-4 p-5`}>
+            <h2 className="mb-1 text-base font-bold text-gray-900 dark:text-gray-50">Time of day</h2>
+            <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">
+              When money leaves · {bounds.label}
+            </p>
+            <TimeOfDayChart data={tod} symbol={symbol} />
+          </section>
+
+          {/* Range summary — bare tiles, not a card inside a card */}
+          <section>
+            <h2 className="mb-3 px-1 text-base font-bold text-gray-900 dark:text-gray-50">This range at a glance</h2>
+            <div className="grid grid-cols-2 gap-3">
+              <Tile label="Total spent" value={formatMoney(rangeTotal, symbol)} sub={bounds.label} />
+              <Tile label="Budgeted" value={formatMoney(rangeBudget, symbol)} sub={bounds.label} />
+              <Tile label={rangeOver > 0 ? "Over by" : "Under by"} value={formatMoney(Math.abs(rangeOver), symbol)}
+                accent={rangeOver > 0 ? DANGER : "#5B8C5A"} sub="vs budget" />
+              <Tile label="Purchases" value={`${catStats.count}`}
+                sub={catStats.count ? `avg ${formatMoney(Math.round(catStats.total / catStats.count), symbol)}` : "none yet"} />
+            </div>
+          </section>
+        </>
+      )}
 
       {/* Share options, shown before the system share sheet */}
       {shareOpen && shareData && (
