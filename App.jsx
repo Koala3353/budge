@@ -40,6 +40,14 @@ function prefetchScreens() {
   importHelp();
 }
 
+// A returning user's screens used to be requested only AFTER hydrate resolved,
+// which put the chunk download behind the Supabase round trip — the browser sat
+// idle on a spinner with the network free, then fetched the UI. Kicking the
+// imports off at module scope starts them before React even mounts, in parallel
+// with everything else. Only for a signed-in visitor: a first-timer still gets
+// the small login path and is prefetched once Welcome renders.
+if (getStoredHash()) prefetchScreens();
+
 const Spinner = () => (
   <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-950">
     <div className="h-8 w-8 animate-spin rounded-full border-2 border-matcha border-t-transparent" />
@@ -121,13 +129,14 @@ export default function App() {
           applyState(merged);
           cachePartialRef.current = false;
           await writeCache(h, merged);
-          await saveBudget(h, merged);
-          setPending(h, false);
+          saveBudget(h, merged)
+            .then(() => setPending(h, false))
+            .catch(() => {}); // stays pending; the retry loop picks it up
         } else {
           applyState(remote);
           cachePartialRef.current = false;
-          await writeCache(h, remote);
           setPending(h, false);
+          writeCache(h, remote); // local mirror; nothing waits on it
         }
       } else {
         // No server data yet (new key / new account) — seed it.
@@ -140,11 +149,15 @@ export default function App() {
           weekOverrides: {},
           weekSpendDays: {},
         };
+        // Paint immediately and seed the server in the background: a new account
+        // has nothing to lose, and blocking "ready" on an upsert meant staring at
+        // a spinner through a second round trip.
         applyState(init);
         cachePartialRef.current = false;
-        await writeCache(h, init);
-        await saveBudget(h, init);
-        setPending(h, false);
+        writeCache(h, init);
+        saveBudget(h, init)
+          .then(() => setPending(h, false))
+          .catch(() => setPending(h, true));
       }
       loadedRef.current = true;
       setStatus("ready");
@@ -181,55 +194,126 @@ export default function App() {
     if (status === "auth") prefetchScreens();
   }, [status]);
 
-  // On any data change: write through to the local cache immediately (durable,
-  // offline-safe), then debounce a sync to Supabase. If the sync fails we stay
-  // "pending" and flush on reconnect.
+  // --- Sync engine ------------------------------------------------------------
+  //
+  // Every edit bumps a generation counter. A push records the generation it is
+  // carrying and only clears the "pending" flag if that is STILL the newest one.
+  // Without this, a slow push that finished after a newer edit had landed would
+  // clear the flag while unsynced data existed — and that data would never be
+  // flushed, because nothing knew it was owed.
+  //
+  // Pushes are single-flight: overlapping writes could otherwise land out of
+  // order and let an older payload win.
+  const genRef = useRef(0);
+  const savingRef = useRef(false);
+  const retryRef = useRef(null);
+  const attemptRef = useRef(0);
+
+  function clearRetry() {
+    if (retryRef.current) {
+      clearTimeout(retryRef.current);
+      retryRef.current = null;
+    }
+  }
+
+  // Back off on repeated failure rather than hammering a network that is down:
+  // 5s, 10s, 20s, 40s, then every minute.
+  function scheduleRetry(h) {
+    clearRetry();
+    const wait = Math.min(60000, 5000 * 2 ** Math.min(attemptRef.current, 3));
+    attemptRef.current += 1;
+    retryRef.current = setTimeout(() => {
+      retryRef.current = null;
+      push(h, "retry");
+    }, wait);
+  }
+
+  async function push(h, reason) {
+    if (!h || !isPending(h)) return;
+    // Single-flight: overlapping pushes can land out of order and let an older
+    // payload win. The in-flight one chains to the newest state when it lands.
+    if (savingRef.current) return;
+    // A known-offline device should not spend a request to find out.
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      setSync("error");
+      return;
+    }
+    savingRef.current = true;
+    const gen = genRef.current;
+    setSync("saving");
+    try {
+      const cached = await readCache(h);
+      let toSave = cached?.blob;
+      if (!toSave) return;
+      // If the cache was ever trimmed we may be missing already-synced rows, so
+      // reconcile with the server before writing, or we would delete them.
+      if (cachePartialRef.current || cached.partial) {
+        const remote = await loadBudget(h);
+        toSave = mergeBlobs(remote, toSave);
+        applyState(toSave);
+        cachePartialRef.current = false;
+        await writeCache(h, toSave);
+      }
+      await saveBudget(h, toSave);
+      attemptRef.current = 0;
+      clearRetry();
+      if (genRef.current === gen) {
+        // Nothing changed while we were pushing — we are genuinely in sync.
+        setPending(h, false);
+        setSync("saved");
+      } else {
+        // A newer edit landed mid-flight. Leave the flag set and push again —
+        // that edit's own debounce was swallowed by the single-flight guard
+        // above, so if we don't chain here nothing else will.
+        setSync("saving");
+        setTimeout(() => push(h, "chain"), 0);
+      }
+    } catch {
+      setSync("error");
+      scheduleRetry(h);
+    } finally {
+      savingRef.current = false;
+    }
+  }
+
+  // On any data change: flag pending FIRST (so a crash mid-write still knows
+  // something is owed), write through to the local cache, then debounce a push.
   useEffect(() => {
     if (!loadedRef.current || !hash) return;
     const blob = buildBlob();
-    writeCache(hash, blob);
+    genRef.current += 1;
     setPending(hash, true);
+    writeCache(hash, blob);
     setSync("saving");
-    const t = setTimeout(async () => {
-      try {
-        await saveBudget(hash, blob);
-        setPending(hash, false);
-        cachePartialRef.current = false;
-        setSync("saved");
-      } catch (e) {
-        setSync("error"); // keep pending — the reconnect handler will retry
-      }
-    }, 600);
+    const t = setTimeout(() => push(hash, "edit"), 600);
     return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categories, settings, transactions, weekOverrides, weekSpendDays, hash]);
 
-  // When the device comes back online, flush any pending offline edits.
+  // Flush whenever the device plausibly regained connectivity. `online` alone is
+  // not enough: it tracks the network interface, not whether Supabase is
+  // reachable, and a phone that slept through a reconnect may never fire it. So
+  // we also try when the app is brought back to the foreground.
   useEffect(() => {
-    async function flush() {
-      if (!hash || !isPending(hash)) return;
-      const cached = await readCache(hash);
-      if (!cached?.blob) return;
-      setSync("saving");
-      try {
-        let toSave = cached.blob;
-        // If the cache was ever trimmed, reconcile with the server first so we
-        // can't overwrite older (already-synced) transactions.
-        if (cachePartialRef.current || cached.partial) {
-          const remote = await loadBudget(hash);
-          toSave = mergeBlobs(remote, cached.blob);
-          applyState(toSave);
-          cachePartialRef.current = false;
-          await writeCache(hash, toSave);
-        }
-        await saveBudget(hash, toSave);
-        setPending(hash, false);
-        setSync("saved");
-      } catch (e) {
-        setSync("error");
-      }
-    }
-    window.addEventListener("online", flush);
-    return () => window.removeEventListener("online", flush);
+    if (!hash) return;
+    const onOnline = () => {
+      attemptRef.current = 0; // a fresh connection deserves an immediate try
+      push(hash, "online");
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") push(hash, "visible");
+    };
+    window.addEventListener("online", onOnline);
+    window.addEventListener("focus", onVisible);
+    document.addEventListener("visibilitychange", onVisible);
+    // Anything left over from a previous session flushes on mount.
+    push(hash, "mount");
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("focus", onVisible);
+      document.removeEventListener("visibilitychange", onVisible);
+      clearRetry();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hash]);
 

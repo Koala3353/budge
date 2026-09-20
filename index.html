@@ -7,6 +7,10 @@
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
     <meta name="theme-color" content="#5B8C5A" />
+    <!-- The first thing the app does after booting is call Supabase. Warming DNS
+         + TLS here takes that handshake off the critical path on mobile. -->
+    <link rel="preconnect" href="https://uwmgisvhhzcbcisdlafp.supabase.co" crossorigin />
+    <link rel="dns-prefetch" href="https://uwmgisvhhzcbcisdlafp.supabase.co" />
     <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
     <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
     <link rel="apple-touch-icon" href="apple-touch-icon.png" />
