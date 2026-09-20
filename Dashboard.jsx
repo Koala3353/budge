@@ -27,6 +27,9 @@ import {
   categorySeries,
   categoryStats,
   savingsLedger,
+  categoryMix,
+  categoryCompare,
+  topPurchases,
 } from "./insights.js";
 import ProgressRing from "./ProgressRing.jsx";
 import RingAmount from "./RingAmount.jsx";
@@ -37,6 +40,8 @@ import HistoryChart from "./HistoryChart.jsx";
 import TimeOfDayChart from "./TimeOfDayChart.jsx";
 import CategoryDetail from "./CategoryDetail.jsx";
 import SavingsView from "./SavingsView.jsx";
+import CategoryMix from "./CategoryMix.jsx";
+import CategoryCompare from "./CategoryCompare.jsx";
 import Modal from "./Modal.jsx";
 import { fitMoney } from "./ringFormat.js";
 import { PlusIcon } from "./icons.jsx";
@@ -62,6 +67,18 @@ const TABS = [
   { key: "trends", label: "Trends" },
   { key: "saved", label: "Saved" },
 ];
+
+// "Today" / "Yesterday" stay, but an older entry gets a short date: the full
+// weekday name is too wide for a compact list on a 320px phone.
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function shortDay(ts) {
+  const d = new Date(ts);
+  const so = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((so(new Date()) - so(d)) / DAY);
+  if (diff === 0) return "Today";
+  if (diff === 1) return "Yesterday";
+  return `${MONTHS[d.getMonth()]} ${d.getDate()}`;
+}
 
 const card =
   "rounded-3xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm";
@@ -205,6 +222,19 @@ export default function Dashboard({
     [transactions, settings.weekStartDay, settings.countZeroSpendDays, bounds.start, bounds.end]
   );
   const rangeOver = rangeTotal - rangeBudget;
+
+  const mix = useMemo(
+    () => categoryMix(transactions, categories, mode, settings, now),
+    [transactions, categories, mode, settings.weekStartDay]
+  );
+  const compare = useMemo(
+    () => categoryCompare(transactions, categories, bounds.start, bounds.end),
+    [transactions, categories, bounds.start, bounds.end]
+  );
+  const purchases = useMemo(
+    () => topPurchases(transactions, categories, bounds.start, bounds.end, 6),
+    [transactions, categories, bounds.start, bounds.end]
+  );
 
   const ledger = useMemo(
     () => savingsLedger(transactions, settings, weekOverrides, now),
@@ -504,6 +534,58 @@ export default function Dashboard({
                 its 4-week average — {formatMoney(trend.thisAmt, symbol)} this week vs{" "}
                 {formatMoney(trend.avg, symbol)} typical.
               </p>
+            </section>
+          )}
+
+          {/* How the split has been moving, not just what it is today */}
+          <section className={`${card} mb-4 p-5`}>
+            <h2 className="text-base font-bold text-gray-900 dark:text-gray-50">Mix over time</h2>
+            <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">
+              Each bar is one {mix.label.includes("day") ? "day" : mix.label.includes("month") ? "month" : "week"},
+              split by category · tap to read it
+            </p>
+            <CategoryMix data={mix} symbol={symbol} />
+          </section>
+
+          {/* Against the previous equal-length period */}
+          <section className={`${card} mb-4 p-5`}>
+            <h2 className="text-base font-bold text-gray-900 dark:text-gray-50">
+              Compared with before
+            </h2>
+            <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">
+              This period vs the one right before it, same length
+            </p>
+            <CategoryCompare data={compare} symbol={symbol} rangeLabel={bounds.label} />
+          </section>
+
+          {/* The actual purchases behind the totals */}
+          {purchases.length > 0 && (
+            <section className={`${card} mb-4 p-5`}>
+              <h2 className="text-base font-bold text-gray-900 dark:text-gray-50">Biggest purchases</h2>
+              <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">{bounds.label}</p>
+              <div className="space-y-1">
+                {purchases.map((pp) => (
+                  <div key={pp.id} className="flex items-center gap-3 py-1.5">
+                    <div
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-base"
+                      style={{ backgroundColor: pp.color + "22" }}
+                    >
+                      {pp.icon}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-gray-900 dark:text-gray-50">
+                        {pp.note || pp.name}
+                      </p>
+                      <p className="truncate text-xs text-gray-500 dark:text-gray-400">
+                        {pp.name} · {shortDay(pp.ts)}
+                      </p>
+                    </div>
+                    <span className="shrink-0 font-mono text-sm font-semibold tabular-nums text-gray-900 dark:text-gray-50">
+                      {fitMoney(pp.amount, symbol, 10)}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </section>
           )}
         </>

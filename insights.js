@@ -300,7 +300,8 @@ export function bucketRanges(mode, settings, now = Date.now()) {
     for (let i = 0; i < 7; i++) {
       const ds = new Date(start);
       ds.setDate(new Date(start).getDate() + i);
-      out.push({ start: ds.getTime(), end: ds.getTime() + DAY });
+      const names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+      out.push({ start: ds.getTime(), end: ds.getTime() + DAY, label: names[ds.getDay()] });
     }
     return { ranges: out, unit: "day", label: "this week, by day" };
   }
@@ -310,7 +311,9 @@ export function bucketRanges(mode, settings, now = Date.now()) {
     for (let i = weeks - 1; i >= 0; i--) {
       const ws = new Date(cur.start);
       ws.setDate(new Date(cur.start).getDate() - i * 7);
-      out.push(getWeekRange(ws.getTime(), wsd));
+      const r = getWeekRange(ws.getTime(), wsd);
+      const d = new Date(r.start);
+      out.push({ ...r, label: `${d.getMonth() + 1}/${d.getDate()}` });
     }
     return { ranges: out, unit: "week", label: `last ${weeks} weeks` };
   }
@@ -320,6 +323,7 @@ export function bucketRanges(mode, settings, now = Date.now()) {
     out.push({
       start: m.getTime(),
       end: new Date(m.getFullYear(), m.getMonth() + 1, 1).getTime(),
+      label: m.toLocaleDateString("en-US", { month: "short" }),
     });
   }
   return { ranges: out, unit: "month", label: "last 12 months" };
@@ -446,5 +450,169 @@ export function savingsLedger(transactions, settings, overrides, now = Date.now(
     worst: rows.length ? rows.reduce((m, x) => (x.net < m.net ? x : m)) : null,
     current,
     includesCurrent: includeCurrent && curTx.length > 0,
+  };
+}
+
+// --- Categories: composition, period-over-period, and the actual purchases ---
+
+/**
+ * Per-bucket category totals for the selected range — the input to a stacked
+ * composition chart. Answers a question the flat breakdown can't: not "what is
+ * the split" but "how has the split been MOVING".
+ *
+ * Categories are returned in a fixed order (largest overall first) so a colour
+ * never changes meaning between buckets, and thin slivers fold into "Other" —
+ * a 1px segment is noise, not information.
+ */
+export function categoryMix(transactions, categories, mode, settings, now = Date.now(), maxSlices = 5) {
+  const { ranges, label } = bucketRanges(mode, settings, now);
+  const start = ranges[0]?.start ?? 0;
+  const end = ranges[ranges.length - 1]?.end ?? 0;
+
+  const totals = new Map();
+  for (const t of transactions) {
+    if (t.ts < start || t.ts >= end) continue;
+    totals.set(t.categoryId, (totals.get(t.categoryId) || 0) + t.amount);
+  }
+  const ranked = [...totals.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => id);
+  const keep = new Set(ranked.slice(0, maxSlices));
+  const hasOther = ranked.length > maxSlices;
+
+  const meta = (id) =>
+    categories.find((c) => c.id === id) || { name: "Uncategorized", color: "#6B7280", icon: "❔" };
+  const slices = ranked.filter((id) => keep.has(id)).map((id) => ({ id, ...meta(id) }));
+  if (hasOther) slices.push({ id: "__other", name: "Other categories", color: "#9CA3AF", icon: "•" });
+
+  const buckets = ranges.map((r) => {
+    const parts = Object.fromEntries(slices.map((sl) => [sl.id, 0]));
+    let total = 0;
+    for (const t of transactions) {
+      if (t.ts < r.start || t.ts >= r.end) continue;
+      const key = keep.has(t.categoryId) ? t.categoryId : "__other";
+      if (parts[key] != null) parts[key] += t.amount;
+      total += t.amount;
+    }
+    return { label: r.label, start: r.start, parts, total };
+  });
+
+  return { buckets, slices, label, max: Math.max(1, ...buckets.map((b) => b.total)) };
+}
+
+/**
+ * Each category this period against the SAME LENGTH period immediately before
+ * it. Distinct from the in-range trend on the breakdown rows, which compares a
+ * range's own two halves — this answers "is this month worse than last month".
+ * Categories that appeared or vanished entirely are included, since those are
+ * the most interesting rows.
+ */
+export function categoryCompare(transactions, categories, start, end) {
+  const span = end - start;
+  const prevStart = start - span;
+  const sumBy = (from, to) => {
+    const m = new Map();
+    for (const t of transactions) {
+      if (t.ts < from || t.ts >= to) continue;
+      m.set(t.categoryId, (m.get(t.categoryId) || 0) + t.amount);
+    }
+    return m;
+  };
+  const now_ = sumBy(start, end);
+  const prev = sumBy(prevStart, start);
+
+  const rows = [];
+  for (const id of new Set([...now_.keys(), ...prev.keys()])) {
+    const cat =
+      categories.find((c) => c.id === id) || { name: "Uncategorized", color: "#6B7280", icon: "❔" };
+    const a = prev.get(id) || 0;
+    const b = now_.get(id) || 0;
+    rows.push({
+      categoryId: id,
+      name: cat.name,
+      color: cat.color,
+      icon: cat.icon,
+      before: a,
+      now: b,
+      delta: b - a,
+      pct: a > 0 ? Math.round(((b - a) / a) * 100) : null, // null = no baseline
+    });
+  }
+  rows.sort((x, y) => Math.abs(y.delta) - Math.abs(x.delta));
+  const totalNow = [...now_.values()].reduce((s, v) => s + v, 0);
+  const totalPrev = [...prev.values()].reduce((s, v) => s + v, 0);
+  return {
+    rows,
+    totalNow,
+    totalPrev,
+    delta: totalNow - totalPrev,
+    hasBaseline: totalPrev > 0,
+    max: Math.max(1, ...rows.map((r) => Math.abs(r.delta))),
+  };
+}
+
+/** The largest single purchases in a range — where the money actually went. */
+export function topPurchases(transactions, categories, start, end, n = 6) {
+  return transactions
+    .filter((t) => t.ts >= start && t.ts < end)
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, n)
+    .map((t) => {
+      const c = categories.find((x) => x.id === t.categoryId);
+      return {
+        id: t.id,
+        amount: t.amount,
+        ts: t.ts,
+        note: t.note?.trim() || "",
+        name: c?.name || "Uncategorized",
+        icon: c?.icon || "💸",
+        color: c?.color || "#6B7280",
+      };
+    });
+}
+
+// --- Saved: trajectory and the shape of your weeks ---------------------------
+
+/** Running total of net across the ledger's weeks — the trajectory, not the sum. */
+export function cumulativeNet(rows) {
+  let run = 0;
+  const points = rows.map((r) => {
+    run += r.net;
+    return { start: r.start, net: r.net, cum: run };
+  });
+  const cums = points.map((p) => p.cum);
+  return {
+    points,
+    min: Math.min(0, ...cums),
+    max: Math.max(0, ...cums),
+    final: run,
+    // The best it ever got, and how far off that peak you are now.
+    peak: cums.length ? Math.max(...cums) : 0,
+    fromPeak: cums.length ? run - Math.max(...cums) : 0,
+  };
+}
+
+/** How the weeks split: under vs over, the longest run of each, and the median. */
+export function weekOutcomes(rows) {
+  const under = rows.filter((r) => r.net >= 0).length;
+  const over = rows.length - under;
+  let bestRun = 0, worstRun = 0, ru = 0, ro = 0;
+  for (const r of rows) {
+    if (r.net >= 0) { ru += 1; ro = 0; } else { ro += 1; ru = 0; }
+    bestRun = Math.max(bestRun, ru);
+    worstRun = Math.max(worstRun, ro);
+  }
+  const sorted = [...rows].map((r) => r.net).sort((a, b) => a - b);
+  const median = sorted.length
+    ? sorted.length % 2
+      ? sorted[(sorted.length - 1) / 2]
+      : Math.round((sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2)
+    : 0;
+  return {
+    total: rows.length,
+    under,
+    over,
+    pctUnder: rows.length ? Math.round((under / rows.length) * 100) : 0,
+    bestRun,
+    worstRun,
+    median,
   };
 }

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { formatMoney } from "./budget.js";
 import { fitMoney } from "./ringFormat.js";
+import { cumulativeNet, weekOutcomes } from "./insights.js";
 
 const GOOD = "#5B8C5A";
 const BAD = "#EF4444";
@@ -197,6 +198,26 @@ export default function SavingsView({ ledger, symbol, rangeRows, rangeLabel, car
         {rangeRows.length > 0 && <DivergingWeeks rows={rangeRows} symbol={symbol} />}
       </section>
 
+      {rangeRows.length > 1 && (
+        <section className={`${card} mb-4 p-5`}>
+          <h2 className="text-base font-bold text-gray-900 dark:text-gray-50">Running total</h2>
+          <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">
+            Where the net has been heading, week by week · {rangeLabel}
+          </p>
+          <RunningTotal rows={rangeRows} symbol={symbol} />
+        </section>
+      )}
+
+      {rangeRows.length > 0 && (
+        <section className={`${card} mb-4 p-5`}>
+          <h2 className="text-base font-bold text-gray-900 dark:text-gray-50">How your weeks went</h2>
+          <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">
+            {rangeRows.length} completed week{rangeRows.length === 1 ? "" : "s"} · {rangeLabel}
+          </p>
+          <Outcomes rows={rangeRows} symbol={symbol} />
+        </section>
+      )}
+
       <section className={`${card} p-5`}>
         <h2 className="mb-3 text-base font-bold text-gray-900 dark:text-gray-50">Your extremes</h2>
         <div className="space-y-2.5">
@@ -228,5 +249,110 @@ export default function SavingsView({ ledger, symbol, rangeRows, rangeLabel, car
         </div>
       </section>
     </>
+  );
+}
+
+/**
+ * The running total, which the per-week bars can't show: a run of small
+ * overspends and one big saving look similar bar-by-bar but land in completely
+ * different places. The zero line is drawn solid — crossing it is the event
+ * this chart exists to make obvious.
+ */
+function RunningTotal({ rows, symbol }) {
+  const { points, min, max, final, peak, fromPeak } = cumulativeNet(rows);
+  const VBW = 340;
+  const VBH = 132;
+  const PAD_B = 18;
+  const plotH = VBH - PAD_B;
+  const span = Math.max(1, max - min);
+  const y = (v) => plotH - ((v - min) / span) * plotH;
+  const x = (i) => (points.length === 1 ? VBW / 2 : (i / (points.length - 1)) * VBW);
+  const zeroY = y(0);
+  const up = final >= 0;
+  const line = points.map((p, i) => `${i ? "L" : "M"} ${x(i).toFixed(1)} ${y(p.cum).toFixed(1)}`).join(" ");
+  const area = `${line} L ${x(points.length - 1).toFixed(1)} ${zeroY.toFixed(1)} L ${x(0).toFixed(1)} ${zeroY.toFixed(1)} Z`;
+
+  return (
+    <div>
+      <svg
+        viewBox={`0 0 ${VBW} ${VBH}`}
+        width="100%"
+        role="img"
+        aria-label={`Running total, ending at ${formatMoney(final, symbol)}`}
+      >
+        <path d={area} fill={up ? GOOD : BAD} opacity="0.12" />
+        <line x1="0" x2={VBW} y1={zeroY} y2={zeroY} className="stroke-gray-400 dark:stroke-gray-500" strokeWidth="1" />
+        <path d={line} fill="none" stroke={up ? GOOD : BAD} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+        <circle cx={x(points.length - 1)} cy={y(final)} r="3.5" fill={up ? GOOD : BAD} />
+        <text x="2" y={zeroY - 4} style={{ fontSize: 9 }} className="fill-gray-500 dark:fill-gray-400">
+          break even
+        </text>
+        <text x={VBW} y={VBH - 5} textAnchor="end" style={{ fontSize: 9, fontWeight: 700 }} className="fill-gray-900 dark:fill-gray-50">
+          {short(points[points.length - 1].start)}
+        </text>
+        <text x="0" y={VBH - 5} style={{ fontSize: 9 }} className="fill-gray-500 dark:fill-gray-400">
+          {short(points[0].start)}
+        </text>
+      </svg>
+      <p className="mt-2 font-mono text-xs text-gray-500 dark:text-gray-400">
+        ends at{" "}
+        <span style={{ color: up ? GOOD : BAD }}>
+          {up ? "+" : "−"}{fitMoney(Math.abs(final), symbol, 10)}
+        </span>
+        {fromPeak < 0 && (
+          <> · {fitMoney(Math.abs(fromPeak), symbol, 9)} below its peak of {fitMoney(peak, symbol, 9)}</>
+        )}
+      </p>
+    </div>
+  );
+}
+
+/** Under vs over at a glance, plus the longest run of each and a typical week. */
+function Outcomes({ rows, symbol }) {
+  const o = weekOutcomes(rows);
+  const bar = (n) => (o.total ? (n / o.total) * 100 : 0);
+  return (
+    <div>
+      <div className="flex h-7 overflow-hidden rounded-lg">
+        {o.under > 0 && (
+          <div className="flex items-center justify-center" style={{ width: `${bar(o.under)}%`, backgroundColor: GOOD }}>
+            <span className="px-1 text-[11px] font-bold text-white">{o.under}</span>
+          </div>
+        )}
+        {o.over > 0 && (
+          <div className="flex items-center justify-center" style={{ width: `${bar(o.over)}%`, backgroundColor: BAD }}>
+            <span className="px-1 text-[11px] font-bold text-white">{o.over}</span>
+          </div>
+        )}
+      </div>
+      <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+        <span className="font-semibold" style={{ color: GOOD }}>{o.pctUnder}%</span> of your weeks
+        finished under budget — {o.under} under, {o.over} over.
+      </p>
+      <div className="mt-3 space-y-2 border-t border-gray-100 pt-3 dark:border-gray-800">
+        <Row label="Longest run under" value={`${o.bestRun} wk`} color={GOOD} />
+        {o.worstRun > 0 && <Row label="Longest run over" value={`${o.worstRun} wk`} color={BAD} />}
+        <Row
+          label="Typical week"
+          value={`${o.median >= 0 ? "+" : "−"}${fitMoney(Math.abs(o.median), symbol, 10)}`}
+          color={o.median >= 0 ? GOOD : BAD}
+          hint="median"
+        />
+      </div>
+    </div>
+  );
+}
+
+function Row({ label, value, color, hint }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2">
+      <span className="min-w-0 text-sm text-gray-600 dark:text-gray-300">
+        {label}
+        {hint && <span className="ml-1.5 text-xs text-gray-400">{hint}</span>}
+      </span>
+      <span className="shrink-0 font-mono text-sm font-semibold tabular-nums" style={{ color }}>
+        {value}
+      </span>
+    </div>
   );
 }
