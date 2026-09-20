@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { formatMoney } from "./budget.js";
+import { fitMoney } from "./ringFormat.js";
 
 const GOOD = "#5B8C5A";
 const BAD = "#EF4444";
@@ -44,11 +45,11 @@ function DivergingWeeks({ rows, symbol }) {
             style={{ color: picked.net >= 0 ? GOOD : BAD }}
           >
             {picked.net >= 0 ? "+" : "−"}
-            {formatMoney(Math.abs(picked.net), symbol)}
+            {fitMoney(Math.abs(picked.net), symbol, 10)}
           </span>
         </span>
         <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
-          {formatMoney(picked.spent, symbol)} of {formatMoney(picked.allowance, symbol)}
+          {fitMoney(picked.spent, symbol, 9)} of {fitMoney(picked.allowance, symbol, 9)}
         </span>
       </div>
 
@@ -134,11 +135,11 @@ export default function SavingsView({ ledger, symbol, rangeRows, rangeLabel, car
           {up ? "Net kept" : "Net down"} · {weeks} completed week{weeks === 1 ? "" : "s"}
         </p>
         <p
-          className="mt-1 text-4xl font-extrabold tracking-tight tabular-nums"
+          className="mt-1 truncate text-[clamp(1.75rem,9vw,2.25rem)] font-extrabold leading-tight tracking-tight tabular-nums"
           style={{ color: up ? GOOD : BAD }}
         >
           {up ? "" : "−"}
-          {formatMoney(Math.abs(net), symbol)}
+          {fitMoney(Math.abs(net), symbol, 11)}
         </p>
         <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
           {up
@@ -147,19 +148,19 @@ export default function SavingsView({ ledger, symbol, rangeRows, rangeLabel, car
         </p>
 
         <div className="mt-4 grid grid-cols-2 gap-3">
-          <div className="rounded-2xl bg-matcha/10 px-4 py-3">
+          <div className="min-w-0 rounded-2xl bg-matcha/10 px-4 py-3">
             <p className="text-xs font-medium text-matcha">Put aside</p>
-            <p className="mt-0.5 font-mono text-lg font-bold tabular-nums" style={{ color: GOOD }}>
-              {formatMoney(saved, symbol)}
+            <p className="mt-0.5 truncate font-mono text-[clamp(0.95rem,4.6vw,1.125rem)] font-bold tabular-nums" style={{ color: GOOD }}>
+              {fitMoney(saved, symbol, 9)}
             </p>
             <p className="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">
               on under-budget weeks
             </p>
           </div>
-          <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: BAD + "1a" }}>
+          <div className="min-w-0 rounded-2xl px-4 py-3" style={{ backgroundColor: BAD + "1a" }}>
             <p className="text-xs font-medium" style={{ color: BAD }}>Spent over</p>
-            <p className="mt-0.5 font-mono text-lg font-bold tabular-nums" style={{ color: BAD }}>
-              {formatMoney(overspent, symbol)}
+            <p className="mt-0.5 truncate font-mono text-[clamp(0.95rem,4.6vw,1.125rem)] font-bold tabular-nums" style={{ color: BAD }}>
+              {fitMoney(overspent, symbol, 9)}
             </p>
             <p className="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">
               on over-budget weeks
@@ -204,7 +205,7 @@ export default function SavingsView({ ledger, symbol, rangeRows, rangeLabel, car
               Best week · {short(best.start)}
             </span>
             <span className="font-mono text-sm font-semibold tabular-nums" style={{ color: best.net >= 0 ? GOOD : BAD }}>
-              {best.net >= 0 ? "+" : "−"}{formatMoney(Math.abs(best.net), symbol)}
+              {best.net >= 0 ? "+" : "−"}{fitMoney(Math.abs(best.net), symbol, 10)}
             </span>
           </div>
           <div className="flex items-baseline justify-between gap-2">
@@ -212,7 +213,7 @@ export default function SavingsView({ ledger, symbol, rangeRows, rangeLabel, car
               Worst week · {short(worst.start)}
             </span>
             <span className="font-mono text-sm font-semibold tabular-nums" style={{ color: worst.net >= 0 ? GOOD : BAD }}>
-              {worst.net >= 0 ? "+" : "−"}{formatMoney(Math.abs(worst.net), symbol)}
+              {worst.net >= 0 ? "+" : "−"}{fitMoney(Math.abs(worst.net), symbol, 10)}
             </span>
           </div>
           <div className="flex items-baseline justify-between gap-2 border-t border-gray-100 pt-2.5 dark:border-gray-800">
@@ -221,7 +222,7 @@ export default function SavingsView({ ledger, symbol, rangeRows, rangeLabel, car
               className="font-mono text-sm font-semibold tabular-nums"
               style={{ color: net >= 0 ? GOOD : BAD }}
             >
-              {net >= 0 ? "+" : "−"}{formatMoney(Math.abs(Math.round(net / weeks)), symbol)}
+              {net >= 0 ? "+" : "−"}{fitMoney(Math.abs(Math.round(net / weeks)), symbol, 10)}
             </span>
           </div>
         </div>

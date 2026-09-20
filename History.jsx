@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { formatMoney, formatTime, dayLabel } from "./budget.js";
+import { fitMoney } from "./ringFormat.js";
 import EditSheet from "./EditSheet.jsx";
 
 /** Group transactions (newest first) into day buckets keyed by label. */
@@ -49,7 +50,7 @@ export default function History({ categories, transactions, settings, onSave, on
                     <button
                       key={t.id}
                       onClick={() => setSelected(t)}
-                      className={`flex w-full items-center gap-3 px-4 py-3 text-left transition active:bg-gray-50 dark:active:bg-gray-800/50 ${
+                      className={`flex w-full items-center gap-2.5 px-3.5 py-3 text-left transition active:bg-gray-50 dark:active:bg-gray-800/50 ${
                         i > 0 ? "border-t border-gray-100 dark:border-gray-800" : ""
                       }`}
                     >
@@ -60,7 +61,7 @@ export default function History({ categories, transactions, settings, onSave, on
                         {c?.icon || "💸"}
                       </span>
                       <div className="min-w-0 flex-1">
-                        <div className="font-semibold text-gray-900 dark:text-gray-50">
+                        <div className="truncate font-semibold text-gray-900 dark:text-gray-50">
                           {c?.name || "Uncategorized"}
                         </div>
                         {t.note && (
@@ -69,9 +70,9 @@ export default function History({ categories, transactions, settings, onSave, on
                           </div>
                         )}
                       </div>
-                      <div className="text-right">
+                      <div className="shrink-0 text-right">
                         <div className="font-mono font-semibold tabular-nums text-gray-900 dark:text-gray-50">
-                          -{formatMoney(t.amount, symbol)}
+                          -{fitMoney(t.amount, symbol, 10)}
                         </div>
                         <div className="text-xs text-gray-400">{formatTime(t.ts)}</div>
                       </div>
@@ -90,6 +91,7 @@ export default function History({ categories, transactions, settings, onSave, on
           tx={selected}
           categories={categories}
           symbol={symbol}
+          weekStartDay={settings.weekStartDay}
           onClose={() => setSelected(null)}
           onSave={(tx) => {
             onSave?.(tx);

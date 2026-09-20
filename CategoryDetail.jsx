@@ -1,4 +1,5 @@
 import { formatMoney } from "./budget.js";
+import { fitMoney } from "./ringFormat.js";
 
 /** Tiny weekly-trend sparkline — shape only, the numbers live in the row. */
 function Spark({ series, color }) {
@@ -49,7 +50,7 @@ export default function CategoryDetail({ stats, series, seriesLabel, symbol }) {
               <div className="mb-1.5 flex items-baseline justify-between gap-2">
                 <span className="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">{r.name}</span>
                 <span className="shrink-0 font-mono text-sm font-semibold tabular-nums text-gray-900 dark:text-white">
-                  {formatMoney(r.amount, symbol)}
+                  {fitMoney(r.amount, symbol, 11)}
                   <span className="ml-1.5 font-sans text-xs font-medium text-gray-500 dark:text-gray-400">
                     {Math.round(r.pct * 100)}%
                   </span>
@@ -68,7 +69,7 @@ export default function CategoryDetail({ stats, series, seriesLabel, symbol }) {
               change chip and the sparkline are never the thing that gets cut. */}
           <div className="mt-2 flex items-center gap-2 pl-14">
             <p className="min-w-0 flex-1 truncate font-mono text-xs text-gray-500 dark:text-gray-400">
-              {r.count}× · avg {formatMoney(r.avg, symbol)}
+              {r.count}× · avg {fitMoney(r.avg, symbol, 8)}
             </p>
             {r.change != null && (
               <span
@@ -81,7 +82,9 @@ export default function CategoryDetail({ stats, series, seriesLabel, symbol }) {
               </span>
             )}
             {series?.[r.categoryId] && (
-              <Spark series={series[r.categoryId]} color={r.color} />
+              <span className="hidden min-[360px]:block">
+                <Spark series={series[r.categoryId]} color={r.color} />
+              </span>
             )}
           </div>
         </div>

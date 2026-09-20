@@ -1,4 +1,5 @@
 import { formatMoney } from "./budget.js";
+import { fitMoney } from "./ringFormat.js";
 
 /**
  * When in the day money leaves. Horizontal bars because the block names are
@@ -23,7 +24,7 @@ export default function TimeOfDayChart({ data, symbol }) {
         const isTop = top && r.key === top.key && r.amount > 0;
         return (
           <div key={r.key} className="flex items-center gap-3">
-            <div className="w-[88px] shrink-0">
+            <div className="w-[76px] shrink-0 sm:w-[88px]">
               <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                 {r.icon} {r.label}
               </p>
@@ -41,8 +42,8 @@ export default function TimeOfDayChart({ data, symbol }) {
                   }}
                 />
               </div>
-              <span className="w-[74px] shrink-0 text-right font-mono text-xs font-semibold tabular-nums text-gray-900 dark:text-gray-50">
-                {formatMoney(r.amount, symbol)}
+              <span className="w-[68px] shrink-0 text-right font-mono text-xs font-semibold tabular-nums text-gray-900 dark:text-gray-50">
+                {fitMoney(r.amount, symbol, 9)}
               </span>
             </div>
           </div>

@@ -57,3 +57,22 @@ export function chooseRingAmount(cents, symbol, avail, measure, opts = {}) {
   const text = compactMoney(cents, symbol);
   return { text, size: clamp(fitSize(text)) };
 }
+
+/**
+ * The same richest-that-fits ladder as chooseRingAmount, but budgeted by
+ * CHARACTER COUNT instead of measured pixels — for the many small labels (stat
+ * tiles, bar captions, category rows) where mounting a measurer each would cost
+ * more than it's worth, and where the font is fixed so characters track width.
+ *
+ *   "₱425,290.29" -> "₱425,290" -> "₱425k"
+ *
+ * Deterministic and layout-free: no reflow, no resize listener, same answer on
+ * the server and in a test.
+ */
+export function fitMoney(cents, symbol, maxChars = 10) {
+  const full = formatMoney(cents, symbol);
+  if (full.length <= maxChars) return full;
+  const nd = noDecimals(cents, symbol);
+  if (nd.length <= maxChars) return nd;
+  return compactMoney(cents, symbol);
+}

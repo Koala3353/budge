@@ -38,6 +38,7 @@ import TimeOfDayChart from "./TimeOfDayChart.jsx";
 import CategoryDetail from "./CategoryDetail.jsx";
 import SavingsView from "./SavingsView.jsx";
 import Modal from "./Modal.jsx";
+import { fitMoney } from "./ringFormat.js";
 import { PlusIcon } from "./icons.jsx";
 
 const DANGER = "#EF4444";
@@ -85,19 +86,21 @@ function RangeTabs({ mode, setMode }) {
 function Tile({ label, value, sub, subColor, accent, onClick, action }) {
   const Comp = onClick ? "button" : "div";
   return (
-    <Comp onClick={onClick} className={`${card} p-4 text-left ${onClick ? "active:scale-[0.99]" : ""}`}>
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-medium text-gray-500 dark:text-gray-400">{label}</p>
+    <Comp onClick={onClick} className={`${card} min-w-0 p-4 text-left ${onClick ? "active:scale-[0.99]" : ""}`}>
+      <div className="flex items-center justify-between gap-1">
+        <p className="min-w-0 truncate text-xs font-medium text-gray-500 dark:text-gray-400">{label}</p>
         {action && <span className="text-xs font-semibold text-matcha">{action}</span>}
       </div>
+      {/* Fluid down to 320px: a six-figure peso amount has no business being
+          24px wide in a half-width card. */}
       <p
-        className="mt-1 text-2xl font-bold tracking-tight text-gray-900 dark:text-gray-50"
+        className="mt-1 truncate text-[clamp(1.125rem,5.6vw,1.5rem)] font-bold leading-tight tracking-tight text-gray-900 dark:text-gray-50"
         style={accent ? { color: accent } : undefined}
       >
         {value}
       </p>
       {sub != null && (
-        <p className="mt-0.5 font-mono text-xs" style={{ color: subColor || "#9CA3AF" }}>
+        <p className="mt-0.5 break-words font-mono text-[11px] leading-snug" style={{ color: subColor || "#9CA3AF" }}>
           {sub}
         </p>
       )}
@@ -210,7 +213,7 @@ export default function Dashboard({
     ? `${formatMoney(paceDiff, symbol)} under pace`
     : `${formatMoney(-paceDiff, symbol)} over pace`;
   const deltaText = lwd.hasPrev
-    ? `${lwd.delta <= 0 ? "↓" : "↑"} ${formatMoney(Math.abs(lwd.delta), symbol)} vs last week`
+    ? `${lwd.delta <= 0 ? "↓" : "↑"}${fitMoney(Math.abs(lwd.delta), symbol, 8)} vs last week`
     : "first week";
 
   // --- shareable recap: options sheet -> image + message ---
@@ -338,22 +341,22 @@ export default function Dashboard({
 
           {/* Stat tiles */}
           <div className="mb-4 grid grid-cols-2 gap-3">
-            <Tile label="Spent this week" value={formatMoney(spent, symbol)}
+            <Tile label="Spent this week" value={fitMoney(spent, symbol)}
               sub={`${pctSpent}% · ${deltaText}`} subColor={lwd.hasPrev && lwd.delta > 0 ? "#F59E0B" : "#9CA3AF"} />
             <Tile label="Spend days" value={`${spendDays} / wk`} sub={hasDaysOverride ? "this week" : "default"}
               action="Edit" onClick={() => { setDaysDraft(spendDays); setDaysOpen(true); }} />
-            <Tile label="Projected end" value={formatMoney(projectedTotal, symbol)}
-              sub={projOver > 0 ? `${formatMoney(projOver, symbol)} over` : `${formatMoney(-projOver, symbol)} under`}
+            <Tile label="Projected end" value={fitMoney(projectedTotal, symbol)}
+              sub={projOver > 0 ? `${fitMoney(projOver, symbol, 9)} over` : `${fitMoney(-projOver, symbol, 9)} under`}
               subColor={projOver > 0 ? "#EF4444" : "#5B8C5A"} />
-            <Tile label="Avg / spend day" value={formatMoney(avg, symbol)} sub="this week" />
-            <Tile label="This month" value={formatMoney(month, symbol)} sub="all weeks" />
+            <Tile label="Avg / spend day" value={fitMoney(avg, symbol)} sub="this week" />
+            <Tile label="This month" value={fitMoney(month, symbol)} sub="all weeks" />
             <Tile label="No-spend days" value={`${noSpend}`} sub="this week" />
-            <Tile label="Net saved" value={formatMoney(ledger.net, symbol)}
+            <Tile label="Net saved" value={fitMoney(ledger.net, symbol)}
               sub={`${ledger.weeks} week${ledger.weeks === 1 ? "" : "s"} · see Saved`}
               accent={ledger.net >= 0 ? undefined : DANGER}
               subColor={ledger.net >= 0 ? "#5B8C5A" : DANGER}
               onClick={() => setTab("saved")} />
-            <Tile label="Biggest spend" value={big ? formatMoney(big.amount, symbol) : "—"}
+            <Tile label="Biggest spend" value={big ? fitMoney(big.amount, symbol) : "—"}
               sub={big ? `${catById(big.categoryId)?.icon || "💸"} ${big.note || catById(big.categoryId)?.name || ""}` : "nothing yet"} />
           </div>
 
@@ -522,13 +525,13 @@ export default function Dashboard({
                       <div
                         key={r.off}
                         title={`${r.label}: ${formatMoney(r.avg, symbol)} average across ${r.days} spending day${r.days === 1 ? "" : "s"}`}
-                        className="flex h-full flex-1 flex-col items-center justify-end"
+                        className="flex h-full min-w-0 flex-1 flex-col items-center justify-end"
                       >
                         <span
                           className="mb-1 whitespace-nowrap font-mono text-[10px] font-semibold tabular-nums"
                           style={{ color: isMax ? "#D97706" : "#5E6E63" }}
                         >
-                          {formatMoney(r.avg, symbol)}
+                          {fitMoney(r.avg, symbol, heat.rows.length > 5 ? 6 : 8)}
                         </span>
                         <div className="w-full rounded-t-md transition-all duration-500" style={{
                           height: `${Math.max(h, 8)}%`,
@@ -560,12 +563,12 @@ export default function Dashboard({
           <section>
             <h2 className="mb-3 px-1 text-base font-bold text-gray-900 dark:text-gray-50">This range at a glance</h2>
             <div className="grid grid-cols-2 gap-3">
-              <Tile label="Total spent" value={formatMoney(rangeTotal, symbol)} sub={bounds.label} />
-              <Tile label="Budgeted" value={formatMoney(rangeBudget, symbol)} sub={bounds.label} />
-              <Tile label={rangeOver > 0 ? "Over by" : "Under by"} value={formatMoney(Math.abs(rangeOver), symbol)}
+              <Tile label="Total spent" value={fitMoney(rangeTotal, symbol)} sub={bounds.label} />
+              <Tile label="Budgeted" value={fitMoney(rangeBudget, symbol)} sub={bounds.label} />
+              <Tile label={rangeOver > 0 ? "Over by" : "Under by"} value={fitMoney(Math.abs(rangeOver), symbol)}
                 accent={rangeOver > 0 ? DANGER : "#5B8C5A"} sub="vs budget" />
               <Tile label="Purchases" value={`${catStats.count}`}
-                sub={catStats.count ? `avg ${formatMoney(Math.round(catStats.total / catStats.count), symbol)}` : "none yet"} />
+                sub={catStats.count ? `avg ${fitMoney(Math.round(catStats.total / catStats.count), symbol, 9)}` : "none yet"} />
             </div>
           </section>
         </>

@@ -1,25 +1,59 @@
 import { useState } from "react";
-import { parseAmount, formatMoney, formatTime } from "./budget.js";
+import { parseAmount, formatMoney, getWeekRange } from "./budget.js";
 
 const DANGER = "#EF4444";
+const pad = (n) => String(n).padStart(2, "0");
+const toDateStr = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const toTimeStr = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 
 /**
- * Bottom-sheet editor for a tapped transaction. Edits the amount, category, and
- * note in place (keeping the original id + timestamp) and saves via onSave, or
+ * Bottom-sheet editor for a tapped transaction: amount, category, note, and the
+ * date and time it happened. Saves via onSave (keeping the original id) or
  * removes it via onDelete. Mounted only while a transaction is selected, with a
  * key on the id so the form state resets for each one.
+ *
+ * Moving a transaction across a week boundary moves the money with it, so the
+ * sheet says so before you save rather than letting two weekly totals change
+ * without explanation.
  */
-export default function EditSheet({ tx, categories = [], symbol, onClose, onSave, onDelete }) {
+export default function EditSheet({
+  tx,
+  categories = [],
+  symbol,
+  weekStartDay = 1,
+  onClose,
+  onSave,
+  onDelete,
+}) {
+  const original = new Date(tx.ts);
   const [amountStr, setAmountStr] = useState((tx.amount / 100).toString());
   const [categoryId, setCategoryId] = useState(tx.categoryId);
   const [note, setNote] = useState(tx.note || "");
+  const [dateStr, setDateStr] = useState(toDateStr(original));
+  const [timeStr, setTimeStr] = useState(toTimeStr(original));
+
+  // Rebuild the timestamp from scratch rather than mutating the original, so an
+  // edit like "Jan 31 -> Feb" can't roll over into March on the way through.
+  const ts = (() => {
+    const [y, m, d] = (dateStr || "").split("-").map(Number);
+    const [hh, mi] = (timeStr || "").split(":").map(Number);
+    if (!y || !m || !d || Number.isNaN(hh) || Number.isNaN(mi)) return null;
+    const next = new Date(y, m - 1, d, hh, mi, original.getSeconds(), original.getMilliseconds());
+    // Reject a rolled-over date (e.g. Feb 31) instead of silently saving March 3.
+    if (next.getMonth() !== m - 1 || next.getDate() !== d) return null;
+    return next.getTime();
+  })();
 
   const cents = parseAmount(amountStr);
-  const canSave = cents > 0 && categoryId != null;
+  const canSave = cents > 0 && categoryId != null && ts != null;
+
+  const movedWeek =
+    ts != null && getWeekRange(ts, weekStartDay).start !== getWeekRange(tx.ts, weekStartDay).start;
+  const inFuture = ts != null && ts > Date.now();
 
   function save() {
     if (!canSave) return;
-    onSave({ ...tx, amount: cents, categoryId, note: note.trim() });
+    onSave({ ...tx, amount: cents, categoryId, note: note.trim(), ts });
   }
 
   return (
@@ -32,10 +66,7 @@ export default function EditSheet({ tx, categories = [], symbol, onClose, onSave
       <div className="relative w-full max-w-md animate-[slideUp_200ms_ease-out] rounded-t-3xl border border-gray-200 bg-white p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-2xl dark:border-gray-800 dark:bg-gray-900">
         <div className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-gray-300 dark:bg-gray-700" />
 
-        <div className="mb-1 flex items-center justify-between">
-          <h3 className="text-base font-bold text-gray-900 dark:text-gray-50">Edit transaction</h3>
-          <span className="text-xs text-gray-400">{formatTime(tx.ts)}</span>
-        </div>
+        <h3 className="mb-1 text-base font-bold text-gray-900 dark:text-gray-50">Edit transaction</h3>
 
         {/* Amount */}
         <label className="mt-3 block text-xs font-medium uppercase tracking-wide text-gray-400">
@@ -46,12 +77,52 @@ export default function EditSheet({ tx, categories = [], symbol, onClose, onSave
           <input
             type="text"
             inputMode="decimal"
-            autoFocus
             value={amountStr}
             onChange={(e) => setAmountStr(e.target.value.replace(/[^0-9.]/g, ""))}
             className="w-full bg-transparent px-2 py-3 text-right text-3xl font-extrabold tabular-nums text-gray-900 focus:outline-none dark:text-gray-50"
           />
         </div>
+
+        {/* When it happened */}
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <div className="min-w-0">
+            <label htmlFor="tx-date" className="block text-xs font-medium uppercase tracking-wide text-gray-400">
+              Date
+            </label>
+            <input
+              id="tx-date"
+              type="date"
+              value={dateStr}
+              onChange={(e) => setDateStr(e.target.value)}
+              className="mt-1 w-full min-w-0 rounded-2xl bg-gray-100 px-3 py-3 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-matcha/40 dark:bg-gray-950 dark:text-gray-50 dark:[color-scheme:dark]"
+            />
+          </div>
+          <div className="min-w-0">
+            <label htmlFor="tx-time" className="block text-xs font-medium uppercase tracking-wide text-gray-400">
+              Time
+            </label>
+            <input
+              id="tx-time"
+              type="time"
+              value={timeStr}
+              onChange={(e) => setTimeStr(e.target.value)}
+              className="mt-1 w-full min-w-0 rounded-2xl bg-gray-100 px-3 py-3 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-matcha/40 dark:bg-gray-950 dark:text-gray-50 dark:[color-scheme:dark]"
+            />
+          </div>
+        </div>
+        {ts == null ? (
+          <p className="mt-2 text-xs font-medium" style={{ color: DANGER }}>
+            That date and time don't make sense — check them before saving.
+          </p>
+        ) : (
+          (movedWeek || inFuture) && (
+            <p className="mt-2 text-xs font-medium text-amber-600 dark:text-amber-400">
+              {movedWeek && "Moves this to a different week, so both weekly totals change."}
+              {movedWeek && inFuture && " "}
+              {inFuture && "This is in the future."}
+            </p>
+          )
+        )}
 
         {/* Category chips */}
         <label className="mt-4 block text-xs font-medium uppercase tracking-wide text-gray-400">
