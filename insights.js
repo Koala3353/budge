@@ -91,7 +91,8 @@ export function noSpendDays(transactions, settings, now = Date.now()) {
  *
  * Returns rows in week order (starting from the user's week-start day).
  */
-export function dowHeatmap(transactions, settings, start, end) {
+export function dowHeatmap(transactions, settings, start, end, now = Date.now()) {
+  const includeZero = !!settings.countZeroSpendDays;
   const wsd = settings.weekStartDay;
   const totals = Array(7).fill(0);
   const days = Array(7).fill(0);
@@ -109,6 +110,22 @@ export function dowHeatmap(transactions, settings, start, end) {
     const off = (new Date(dayStart).getDay() - wsd + 7) % 7;
     totals[off] += amount;
     days[off] += 1;
+  }
+
+  // Opt-in (Settings → Advanced): also count the days you logged nothing, which
+  // pulls each weekday's average toward zero. Only days inside your active range
+  // count — calendar days before your first entry, or still in the future, were
+  // never days you could have spent on.
+  if (includeZero) {
+    const earliest = transactions.length ? Math.min(...transactions.map((t) => t.ts)) : null;
+    if (earliest != null) {
+      const from = Math.max(startOfDay(start), startOfDay(earliest));
+      const to = Math.min(end, now);
+      for (let d = from; d < to; d += DAY) {
+        if (byDay.has(d)) continue; // already counted above
+        days[(new Date(d).getDay() - wsd + 7) % 7] += 1;
+      }
+    }
   }
 
   // Full short names, not initials: with the unspent weekdays removed, a bare
@@ -381,6 +398,7 @@ export function categoryStats(transactions, categories, start, end) {
  * every time you log a lunch.
  */
 export function savingsLedger(transactions, settings, overrides, now = Date.now()) {
+  const includeCurrent = !!settings.countCurrentWeekInSaved;
   const wsd = settings.weekStartDay;
   const empty = { rows: [], saved: 0, overspent: 0, net: 0, weeks: 0, best: null, worst: null, current: null };
   if (!transactions.length) return empty;
@@ -400,10 +418,23 @@ export function savingsLedger(transactions, settings, overrides, now = Date.now(
     r = getWeekRange(r.start + 7 * DAY, wsd);
   }
 
-  const saved = rows.reduce((s, x) => (x.net > 0 ? s + x.net : s), 0);
-  const overspent = rows.reduce((s, x) => (x.net < 0 ? s - x.net : s), 0);
   const curTx = weekTransactions(transactions, cur);
   const curAllowance = getAllowanceForWeek(weekKey(cur.start, wsd), settings, overrides);
+  const current = {
+    start: cur.start,
+    end: cur.end,
+    allowance: curAllowance,
+    spent: sum(curTx),
+    net: curAllowance - sum(curTx),
+    count: curTx.length,
+  };
+  // Opt-in: fold the unfinished week into the totals. Off by default because the
+  // headline then swings every time you log a lunch — the week starts out looking
+  // like a full week's saving and shrinks all week.
+  if (includeCurrent && curTx.length) rows.push(current);
+
+  const saved = rows.reduce((s, x) => (x.net > 0 ? s + x.net : s), 0);
+  const overspent = rows.reduce((s, x) => (x.net < 0 ? s - x.net : s), 0);
 
   return {
     rows,
@@ -413,6 +444,7 @@ export function savingsLedger(transactions, settings, overrides, now = Date.now(
     weeks: rows.length,
     best: rows.length ? rows.reduce((m, x) => (x.net > m.net ? x : m)) : null,
     worst: rows.length ? rows.reduce((m, x) => (x.net < m.net ? x : m)) : null,
-    current: { allowance: curAllowance, spent: sum(curTx), net: curAllowance - sum(curTx), count: curTx.length },
+    current,
+    includesCurrent: includeCurrent && curTx.length > 0,
   };
 }

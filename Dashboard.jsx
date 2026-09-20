@@ -51,6 +51,11 @@ const RANGES = [
   { key: "year", label: "1 Year" },
 ];
 
+// How much a detail level shows. A tile declares the lowest level it appears at,
+// so "simple" is a filter over one list rather than a second copy of the markup.
+const LEVELS = { simple: 0, standard: 1, detailed: 2 };
+const levelOf = (settings) => LEVELS[settings.dashboardDetail] ?? LEVELS.standard;
+
 const TABS = [
   { key: "overview", label: "Overview" },
   { key: "categories", label: "Categories" },
@@ -167,8 +172,13 @@ export default function Dashboard({
   const catById = (id) => categories.find((c) => c.id === id);
   const recent = [...transactions].sort((a, b) => b.ts - a.ts).slice(0, 3);
 
-  const [tab, setTab] = useState("overview");
-  const [mode, setMode] = useState("month");
+  const detail = levelOf(settings);
+  const [tab, setTab] = useState(() =>
+    TABS.some((t) => t.key === settings.defaultTab) ? settings.defaultTab : "overview"
+  );
+  const [mode, setMode] = useState(() =>
+    RANGES.some((r) => r.key === settings.defaultRange) ? settings.defaultRange : "month"
+  );
   const history = computeHistory(transactions, mode, settings, weekOverrides, now);
   const rangeTotal = history.buckets.reduce((s, b) => s + b.spent, 0);
 
@@ -191,14 +201,14 @@ export default function Dashboard({
     [transactions, bounds.start, bounds.end]
   );
   const heat = useMemo(
-    () => dowHeatmap(transactions, settings, bounds.start, bounds.end),
-    [transactions, settings.weekStartDay, bounds.start, bounds.end]
+    () => dowHeatmap(transactions, settings, bounds.start, bounds.end, now),
+    [transactions, settings.weekStartDay, settings.countZeroSpendDays, bounds.start, bounds.end]
   );
   const rangeOver = rangeTotal - rangeBudget;
 
   const ledger = useMemo(
     () => savingsLedger(transactions, settings, weekOverrides, now),
-    [transactions, settings, weekOverrides]
+    [transactions, settings, weekOverrides, settings.countCurrentWeekInSaved]
   );
   // The headline is all-time; the week-by-week chart honours the range switcher.
   const ledgerRows = ledger.rows.filter((r) => r.start >= bounds.start && r.start < bounds.end);
@@ -339,25 +349,41 @@ export default function Dashboard({
             </div>
           </section>
 
-          {/* Stat tiles */}
+          {/* Stat tiles — filtered by the detail level in Settings → Advanced */}
           <div className="mb-4 grid grid-cols-2 gap-3">
-            <Tile label="Spent this week" value={fitMoney(spent, symbol)}
-              sub={`${pctSpent}% · ${deltaText}`} subColor={lwd.hasPrev && lwd.delta > 0 ? "#F59E0B" : "#9CA3AF"} />
-            <Tile label="Spend days" value={`${spendDays} / wk`} sub={hasDaysOverride ? "this week" : "default"}
-              action="Edit" onClick={() => { setDaysDraft(spendDays); setDaysOpen(true); }} />
-            <Tile label="Projected end" value={fitMoney(projectedTotal, symbol)}
-              sub={projOver > 0 ? `${fitMoney(projOver, symbol, 9)} over` : `${fitMoney(-projOver, symbol, 9)} under`}
-              subColor={projOver > 0 ? "#EF4444" : "#5B8C5A"} />
-            <Tile label="Avg / spend day" value={fitMoney(avg, symbol)} sub="this week" />
-            <Tile label="This month" value={fitMoney(month, symbol)} sub="all weeks" />
-            <Tile label="No-spend days" value={`${noSpend}`} sub="this week" />
-            <Tile label="Net saved" value={fitMoney(ledger.net, symbol)}
-              sub={`${ledger.weeks} week${ledger.weeks === 1 ? "" : "s"} · see Saved`}
-              accent={ledger.net >= 0 ? undefined : DANGER}
-              subColor={ledger.net >= 0 ? "#5B8C5A" : DANGER}
-              onClick={() => setTab("saved")} />
-            <Tile label="Biggest spend" value={big ? fitMoney(big.amount, symbol) : "—"}
-              sub={big ? `${catById(big.categoryId)?.icon || "💸"} ${big.note || catById(big.categoryId)?.name || ""}` : "nothing yet"} />
+            {[
+              { lvl: 0, label: "Spent this week", value: fitMoney(spent, symbol),
+                sub: `${pctSpent}% · ${deltaText}`,
+                subColor: lwd.hasPrev && lwd.delta > 0 ? "#F59E0B" : "#9CA3AF" },
+              { lvl: 0, label: "Net saved", value: fitMoney(ledger.net, symbol),
+                sub: `${ledger.weeks} week${ledger.weeks === 1 ? "" : "s"} · see Saved`,
+                accent: ledger.net >= 0 ? undefined : DANGER,
+                subColor: ledger.net >= 0 ? "#5B8C5A" : DANGER,
+                onClick: () => setTab("saved") },
+              { lvl: 1, label: "Spend days", value: `${spendDays} / wk`,
+                sub: hasDaysOverride ? "this week" : "default",
+                action: "Edit", onClick: () => { setDaysDraft(spendDays); setDaysOpen(true); } },
+              { lvl: 1, label: "Projected end", value: fitMoney(projectedTotal, symbol),
+                sub: projOver > 0 ? `${fitMoney(projOver, symbol, 9)} over` : `${fitMoney(-projOver, symbol, 9)} under`,
+                subColor: projOver > 0 ? "#EF4444" : "#5B8C5A" },
+              { lvl: 1, label: "Avg / spend day", value: fitMoney(avg, symbol), sub: "this week" },
+              { lvl: 1, label: "This month", value: fitMoney(month, symbol), sub: "all weeks" },
+              { lvl: 1, label: "No-spend days", value: `${noSpend}`, sub: "this week" },
+              { lvl: 1, label: "Biggest spend", value: big ? fitMoney(big.amount, symbol) : "—",
+                sub: big ? `${catById(big.categoryId)?.icon || "💸"} ${big.note || catById(big.categoryId)?.name || ""}` : "nothing yet" },
+              { lvl: 2, label: "Pace", value: fitMoney(Math.abs(paceDiff), symbol),
+                sub: paceDiff >= 0 ? "under pace" : "over pace",
+                accent: paceDiff >= 0 ? "#5B8C5A" : "#F59E0B",
+                subColor: paceDiff >= 0 ? "#5B8C5A" : "#F59E0B" },
+              { lvl: 2, label: "Purchases", value: `${weekTx.length}`,
+                sub: weekTx.length ? `avg ${fitMoney(Math.round(spent / weekTx.length), symbol, 9)}` : "none yet" },
+              { lvl: 2, label: "Best streak", value: `${stk.longest} wk`,
+                sub: stk.current ? `${stk.current} now` : "none now", subColor: "#5B8C5A" },
+              { lvl: 2, label: "Week progress", value: `${Math.round((spendDaysUsed / spendDays) * 100)}%`,
+                sub: `${spendDaysLeft} spend day${spendDaysLeft === 1 ? "" : "s"} left` },
+            ]
+              .filter((t) => t.lvl <= detail)
+              .map((t) => <Tile key={t.label} {...t} />)}
           </div>
 
           {/* This week's categories, with the full view one tap away */}
@@ -393,8 +419,8 @@ export default function Dashboard({
             )}
           </section>
 
-          {/* Last week recap + share */}
-          {recap && (
+          {/* Last week recap + share — hidden at the Simple detail level */}
+          {recap && detail >= LEVELS.standard && (
             <section className={`${card} mb-4 p-5`}>
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="text-base font-bold text-gray-900 dark:text-gray-50">Last week recap</h2>
@@ -461,8 +487,8 @@ export default function Dashboard({
             </p>
             <CategoryDetail
               stats={catStats}
-              series={catSeries.series}
-              seriesLabel={catSeries.label}
+              series={settings.showSparklines === false ? null : catSeries.series}
+              seriesLabel={settings.showSparklines === false ? null : catSeries.label}
               symbol={symbol}
             />
           </section>

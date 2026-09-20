@@ -15,6 +15,26 @@ const SYNC_LABEL = {
   idle: { text: "", color: "text-gray-400" },
 };
 
+const DETAIL_LEVELS = [
+  { value: "simple", label: "Simple", hint: "Just the ring, what you've spent, and where it went." },
+  { value: "standard", label: "Standard", hint: "The full set of tiles. The default." },
+  { value: "detailed", label: "Detailed", hint: "Adds pace, purchase count, best streak and week progress." },
+];
+
+const DEFAULT_TABS = [
+  { value: "overview", label: "Overview" },
+  { value: "categories", label: "Categories" },
+  { value: "trends", label: "Trends" },
+  { value: "saved", label: "Saved" },
+];
+
+const DEFAULT_RANGES = [
+  { value: "week", label: "Week" },
+  { value: "month", label: "Month" },
+  { value: "3m", label: "3 Months" },
+  { value: "year", label: "1 Year" },
+];
+
 const card =
   "rounded-3xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm";
 const input =
@@ -221,6 +241,87 @@ export default function Settings({
         </button>
       </Section>
 
+      <Section title="Advanced">
+        <div className={`${card} p-4`}>
+          <p className="text-sm font-semibold text-gray-900 dark:text-gray-50">Dashboard detail</p>
+          <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+            How much the Overview tab shows at once.
+          </p>
+          <div className="mt-3 flex gap-1 rounded-2xl bg-gray-100 p-1 dark:bg-white/5">
+            {DETAIL_LEVELS.map((d) => (
+              <button
+                key={d.value}
+                onClick={() => onUpdateSettings({ dashboardDetail: d.value })}
+                aria-pressed={(settings.dashboardDetail || "standard") === d.value}
+                className={`flex-1 rounded-xl py-2 text-xs font-semibold transition ${
+                  (settings.dashboardDetail || "standard") === d.value
+                    ? "bg-white text-gray-900 shadow-sm dark:bg-gray-800 dark:text-gray-50"
+                    : "text-gray-500 dark:text-gray-400"
+                }`}
+              >
+                {d.label}
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-gray-400">
+            {DETAIL_LEVELS.find((d) => d.value === (settings.dashboardDetail || "standard"))?.hint}
+          </p>
+        </div>
+
+        <div className={`${card} divide-y divide-gray-100 overflow-hidden dark:divide-gray-800`}>
+          <Toggle
+            label="Count days with no spending"
+            hint="In Spend by day. Off means a ₱0 day is treated as a day off — no classes — instead of a cheap day, so it doesn't drag that weekday's average down."
+            on={!!settings.countZeroSpendDays}
+            onChange={(v) => onUpdateSettings({ countZeroSpendDays: v })}
+          />
+          <Toggle
+            label="Count this week in Saved"
+            hint="Off means only finished weeks count, so the total doesn't swing every time you log something mid-week."
+            on={!!settings.countCurrentWeekInSaved}
+            onChange={(v) => onUpdateSettings({ countCurrentWeekInSaved: v })}
+          />
+          <Toggle
+            label="Category trend lines"
+            hint="The small sparkline beside each category. Hidden automatically on very narrow screens."
+            on={settings.showSparklines !== false}
+            onChange={(v) => onUpdateSettings({ showSparklines: v })}
+          />
+        </div>
+
+        <Field label="Dashboard opens on">
+          <select
+            value={settings.defaultTab || "overview"}
+            onChange={(e) => onUpdateSettings({ defaultTab: e.target.value })}
+            className={input}
+          >
+            {DEFAULT_TABS.map((t) => (
+              <option key={t.value} value={t.value}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="Default range">
+          <select
+            value={settings.defaultRange || "month"}
+            onChange={(e) => onUpdateSettings({ defaultRange: e.target.value })}
+            className={input}
+          >
+            {DEFAULT_RANGES.map((r) => (
+              <option key={r.value} value={r.value}>
+                {r.label}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 px-1 text-xs text-gray-400">
+            The period Categories, Trends and Saved start on. Takes effect next time the Dashboard
+            opens.
+          </p>
+        </Field>
+      </Section>
+
       <Section title="Data">
         <div className="grid grid-cols-2 gap-3">
           <button
@@ -368,6 +469,33 @@ function Section({ title, children }) {
       </h2>
       <div className="space-y-3">{children}</div>
     </section>
+  );
+}
+
+/** A labelled switch row. The hint says what the setting is FOR, not what it is. */
+function Toggle({ label, hint, on, onChange }) {
+  return (
+    <div className="flex items-start gap-3 px-4 py-3.5">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-gray-900 dark:text-gray-50">{label}</p>
+        <p className="mt-0.5 text-xs leading-snug text-gray-500 dark:text-gray-400">{hint}</p>
+      </div>
+      <button
+        role="switch"
+        aria-checked={on}
+        aria-label={label}
+        onClick={() => onChange(!on)}
+        className={`relative mt-0.5 h-6 w-11 shrink-0 rounded-full transition-colors ${
+          on ? "bg-matcha" : "bg-gray-200 dark:bg-gray-700"
+        }`}
+      >
+        <span
+          className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+            on ? "translate-x-5" : "translate-x-0"
+          }`}
+        />
+      </button>
+    </div>
   );
 }
 

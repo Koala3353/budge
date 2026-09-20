@@ -80,14 +80,49 @@ export default function Help() {
         <p>Tap the chart shortcut at the top, or the Dashboard tab, anytime to see where you stand.</p>
       </Topic>
 
-      <Topic id="edit" title="Editing or deleting an entry" hint="Fix a mistake or remove a spend" {...props}>
+      <Topic id="edit" title="Editing or deleting an entry" hint="Fix the amount, category, note, date or time" {...props}>
         <p>
           Open the <b>History</b> tab and tap any entry. The sheet that slides up lets you change the
-          amount, category, or note — tap <b>Save</b> to update that same entry (it keeps its
-          original date and time).
+          <b> amount</b>, <b>category</b>, <b>note</b>, and the <b>date and time</b> it happened —
+          useful when you log yesterday's lunch this morning. Tap <b>Save</b> to update that entry.
+        </p>
+        <p>
+          Changing the date moves the money with it. If the new date lands in a different week, the
+          sheet warns you first, because two weekly totals change: the week it left and the week it
+          joined.
         </p>
         <p>
           To remove it, tap <b>Delete</b>. Either way, your totals and charts update right away.
+        </p>
+      </Topic>
+
+      <Topic id="tabs" title="Finding your way around" hint="The four dashboard tabs" {...props}>
+        <p>The Dashboard is split into four tabs so no single page runs long:</p>
+        <Term name="Overview">this week — the ring, your daily limit, and the tiles. Where you check in day to day.</Term>
+        <Term name="Categories">where the money goes, over whichever period you pick.</Term>
+        <Term name="Trends">spending over time, by weekday, and by time of day.</Term>
+        <Term name="Saved">whether you're actually up or down overall.</Term>
+        <p>
+          Categories, Trends and Saved share one <b>range switcher</b> (Week / Month / 3 Months /
+          1 Year). Changing it moves every chart on the page together, so they always describe the
+          same stretch of time.
+        </p>
+      </Topic>
+
+      <Topic id="saved" title="Saved — am I actually up?" hint="Savings, minus the weeks you went over" {...props}>
+        <p>
+          Every finished week you logged in contributes <b>budget minus spending</b>. A week you came
+          in under adds; a week you went over <b>subtracts</b>. The headline is the two netted off, so
+          it tells you the truth rather than only counting good weeks — and it can be negative.
+        </p>
+        <p>
+          Under it, <b>Put aside</b> and <b>Spent over</b> show those two halves separately, so a
+          healthy net doesn't hide a rough patch.
+        </p>
+        <p>
+          The <b>week-by-week</b> chart draws kept above the line and overspent below it. Tap any bar
+          to read that week. The current week is shown but left out of the totals until it ends — you
+          can change that in Settings → Advanced.
         </p>
       </Topic>
 
@@ -130,11 +165,14 @@ export default function Help() {
         <Term name="Avg / spend day">average spent per spend day so far this week.</Term>
         <Term name="This month">total across all weeks in the current calendar month.</Term>
         <Term name="No-spend days">days this week where you logged nothing.</Term>
-        <Term name="Saved so far">total left over from past finished weeks where you came in under budget.</Term>
+        <Term name="Net saved">what you've put aside minus what you've overspent, across finished weeks. Tap it to open the Saved tab.</Term>
         <Term name="Biggest spend">your largest single entry this week.</Term>
         <Term name="🔥 streak">consecutive finished weeks you stayed within budget (“best” is your record).</Term>
         <Term name="Expense by Category">where this week's money went, with a trend vs your 4-week average.</Term>
-        <Term name="Spend by day">your average spend for each weekday, over the weeks you've been using budge·.</Term>
+        <Term name="Spend by day">your average spend for each weekday, over the selected range. By default only days you actually spent on count, and a weekday you never spend on is left out entirely.</Term>
+        <Term name="Time of day">when money leaves — morning, midday, afternoon or evening. A purchase after midnight counts toward the evening before.</Term>
+        <Term name="Spending over time">a bar per day, week or month, with a dashed line showing that period's own budget — not this week's.</Term>
+        <Term name="Pace / Purchases / Best streak / Week progress">extra tiles that appear at the Detailed level (Settings → Advanced).</Term>
       </Topic>
 
       <Topic id="math" title="How the numbers are calculated" hint="For the curious" {...props}>
@@ -142,9 +180,36 @@ export default function Help() {
         <Term name="Projected end">what you've spent ÷ spend days used so far × your total spend days.</Term>
         <Term name="Pace">what you'd expect to have spent by now (budget spread evenly across spend days) minus what you actually spent. Positive means under pace.</Term>
         <Term name="Streak">counts finished weeks where total spend ≤ that week's budget; the current week doesn't count until it ends.</Term>
+        <Term name="Net saved">the sum of (that week's budget − what you spent) over every finished week you logged in. Weeks you went over come out negative and pull the total down. Weeks you logged nothing are skipped — a week before you started using budge· isn't a week you saved a full budget.</Term>
+        <Term name="Spend by day">a weekday's total ÷ the number of days you actually spent on it. A ₱0 day usually means no classes rather than a cheap day, so counting it would say more about your timetable than your spending. You can switch that in Settings → Advanced.</Term>
+        <Term name="The budget line">each bar is compared against the budget that applied to <i>that</i> week or month, including any one-off adjustment you made — so an adjusted week shows its own step rather than being judged against this week's number.</Term>
         <p className="pt-1 text-gray-500 dark:text-gray-400">
           Everything is tracked to the centavo and only rounded when shown.
         </p>
+      </Topic>
+
+      <Topic id="advanced" title="Advanced settings" hint="Tune what the dashboard shows and how it counts" {...props}>
+        <p>
+          <b>Settings → Advanced</b> holds the options that change how budge· presents and counts
+          things. Every default is the behaviour you already had, so you only need these if something
+          doesn't match how you actually live.
+        </p>
+        <Term name="Dashboard detail">
+          <b>Simple</b> keeps the ring, what you've spent and where it went. <b>Standard</b> is the
+          full set of tiles. <b>Detailed</b> adds pace, purchase count, best streak and week progress.
+        </Term>
+        <Term name="Count days with no spending">
+          off by default. Leave it off if a ₱0 day usually means no classes — counting those days
+          drags every weekday's average toward zero. Turn it on if you spend on a normal day and want
+          the quiet ones to count against the average.
+        </Term>
+        <Term name="Count this week in Saved">
+          off by default, so the Saved total only moves when a week finishes. Turn it on if you'd
+          rather watch it update live — it starts the week looking like a full week's saving and
+          shrinks as you spend.
+        </Term>
+        <Term name="Category trend lines">the small sparkline beside each category. It hides itself on very narrow screens regardless.</Term>
+        <Term name="Dashboard opens on / Default range">which tab and which period you land on, so the view you check most is one tap away — or none.</Term>
       </Topic>
 
       <Topic id="privacy" title="Your money & data" hint="What we can see, and how it's kept safe" {...props}>

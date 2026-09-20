@@ -17,6 +17,15 @@ export const DEFAULT_SETTINGS = {
   currencySymbol: "₱",
   weekStartDay: 1, // Monday
   spendDaysPerWeek: 5, // typical school spending days; drives the daily-limit pacing
+
+  // --- Advanced (Settings → Advanced). Every default below is the behaviour the
+  // app had before these became options, so an existing account sees no change.
+  dashboardDetail: "standard", // "simple" | "standard" | "detailed"
+  defaultTab: "overview", // which dashboard tab opens first
+  defaultRange: "month", // which range the Categories/Trends/Saved views open on
+  countZeroSpendDays: false, // include ₱0 days in the Spend-by-day average
+  countCurrentWeekInSaved: false, // let the unfinished week move the Saved totals
+  showSparklines: true, // the per-category trend line in Categories
 };
 
 export const DEFAULT_WEEK_OVERRIDES = {};
