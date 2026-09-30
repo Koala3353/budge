@@ -30,37 +30,65 @@ export function storeHash(hash) {
 
 /**
  * Call a Supabase SECURITY DEFINER RPC via PostgREST. Replaces the
- * @supabase/supabase-js client — we only need these two functions, so a bare
+ * @supabase/supabase-js client — we only need a handful of functions, so a bare
  * fetch keeps the bundle small and skips the auth/realtime/storage modules.
+ *
+ * Every call has a timeout. Without one, a phone on "lie-fi" (bars showing, no
+ * packets moving — common on mobile data and captive-portal wifi) holds the
+ * request open for a minute or more, and everything waiting on it waits too.
+ *
+ * `keepalive` lets a write outlive the page: used for the flush when the app is
+ * backgrounded or swiped away. Browsers cap keepalive bodies at 64 KB, so a
+ * larger blob falls back to an ordinary request.
  */
-async function rpc(fn, body) {
-  const res = await fetch(`${RPC_URL}/${fn}`, {
-    method: "POST",
-    headers: {
-      apikey: SUPABASE_KEY,
-      Authorization: `Bearer ${SUPABASE_KEY}`,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    throw new Error(`rpc ${fn} failed (${res.status}) ${detail}`);
+async function rpc(fn, body, { timeout = 10000, keepalive = false } = {}) {
+  const payload = JSON.stringify(body);
+  const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), timeout) : null;
+  try {
+    const res = await fetch(`${RPC_URL}/${fn}`, {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: payload,
+      keepalive: keepalive && payload.length < 60000,
+      signal: ctrl?.signal,
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      const err = new Error(`rpc ${fn} failed (${res.status}) ${detail}`);
+      err.status = res.status;
+      throw err;
+    }
+    const text = await res.text();
+    return text ? JSON.parse(text) : null;
+  } finally {
+    if (timer) clearTimeout(timer);
   }
-  const text = await res.text();
-  return text ? JSON.parse(text) : null;
 }
 
 /** Load a user's budget blob by hash. Returns the JSON object or null if new. */
-export async function loadBudget(hash) {
-  const data = await rpc("get_budget", { p_hash: hash });
+export async function loadBudget(hash, opts) {
+  const data = await rpc("get_budget", { p_hash: hash }, opts);
   return data || null;
 }
 
 /** Upsert the full budget blob for a hash. */
-export async function saveBudget(hash, payload) {
-  await rpc("upsert_budget", { p_hash: hash, p_data: payload });
+export async function saveBudget(hash, payload, opts) {
+  await rpc("upsert_budget", { p_hash: hash, p_data: payload }, opts);
+}
+
+/**
+ * App-wide statistics for the admin screen. The server decides whether this
+ * hash is an admin (see supabase-schema.sql) — the hidden gesture that opens the
+ * screen is only a way in, not the lock. Returns aggregate numbers only.
+ */
+export async function loadAdminStats(hash) {
+  return rpc("admin_stats", { p_hash: hash, p_tz: "Asia/Manila" }, { timeout: 20000 });
 }
 
 // ---------------------------------------------------------------------------
@@ -193,6 +221,7 @@ export async function clearCache(hash) {
     /* ignore */
   }
   removeLegacy(hash);
+  clearJournal(hash);
   setPending(hash, false);
 }
 
@@ -232,18 +261,119 @@ export function isPending(hash) {
   }
 }
 
-/**
- * Reconcile two blobs without losing data: union transactions by id, and take
- * scalar fields (settings, categories, overrides) from whichever blob is newer.
- * Used when flushing offline edits in case the local cache was trimmed.
- */
+// --- close-safe journal ------------------------------------------------------
+//
+// IndexedDB writes are asynchronous: an edit made a moment before the app is
+// swiped away can be lost if the process dies before the transaction commits.
+// localStorage is synchronous, so when the page is being hidden we copy the
+// current state there too — a write that returns has happened. The next launch
+// merges it back in and clears it once IndexedDB holds it.
+
+const JOURNAL_PREFIX = "budget.journal.";
+
+export function writeJournal(hash, blob) {
+  try {
+    localStorage.setItem(JOURNAL_PREFIX + hash, JSON.stringify(blob));
+    return true;
+  } catch {
+    return false; // quota — IndexedDB still has everything but the last moment
+  }
+}
+
+export function readJournal(hash) {
+  try {
+    const raw = localStorage.getItem(JOURNAL_PREFIX + hash);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearJournal(hash) {
+  try {
+    localStorage.removeItem(JOURNAL_PREFIX + hash);
+  } catch {
+    /* ignore */
+  }
+}
+
+// --- merging --------------------------------------------------------------------
+//
+// Two copies of an account meet whenever a device reconnects: the server's and
+// the device's. Merging must never lose a change from either side, so it works
+// per item rather than per blob:
+//
+//   - Transactions: union by id. When both sides have one, the later edit wins
+//     (`mt`, falling back to `ts` for entries written before edits were stamped).
+//   - Deletions: a tombstone { id: deletedAt } travels with the blob. Without it
+//     a union can't tell "deleted here" from "not seen yet there", and every
+//     entry deleted offline came back on reconnect.
+//   - Settings, categories and the per-week maps: each has its own timestamp, so
+//     changing your budget on one phone and adding a category on another keeps
+//     both, instead of the whole newer blob winning.
+//
+// Because every push merges before writing and every device keeps its own copy,
+// the rare case where two devices write at once heals itself: the next time the
+// other device syncs, its copy merges its changes back in.
+
+export const FIELDS = ["categories", "settings", "weekOverrides", "weekSpendDays"];
+const TOMBSTONE_TTL = 180 * 86400000;
+
+const modTime = (t) => t.mt ?? t.ts ?? 0;
+const fieldTime = (blob, k) => blob.fieldTimes?.[k] ?? blob.updatedAt ?? 0;
+
 export function mergeBlobs(remote, local) {
   if (!remote) return local;
   if (!local) return remote;
+
+  const deleted = {};
+  for (const src of [remote.deleted, local.deleted]) {
+    for (const [id, at] of Object.entries(src || {})) {
+      if (!(deleted[id] >= at)) deleted[id] = at;
+    }
+  }
+  const cutoff = Date.now() - TOMBSTONE_TTL;
+  for (const id of Object.keys(deleted)) if (deleted[id] < cutoff) delete deleted[id];
+
   const map = new Map();
   for (const t of remote.transactions || []) map.set(t.id, t);
-  for (const t of local.transactions || []) map.set(t.id, t); // local wins on conflict
-  const newer = (local.updatedAt || 0) >= (remote.updatedAt || 0) ? local : remote;
-  const { _partial, ...clean } = newer;
-  return { ...clean, transactions: [...map.values()].sort((a, b) => b.ts - a.ts) };
+  for (const t of local.transactions || []) {
+    const other = map.get(t.id);
+    if (!other || modTime(t) >= modTime(other)) map.set(t.id, t); // tie → local
+  }
+  for (const [id, t] of map) if (deleted[id] != null && deleted[id] >= modTime(t)) map.delete(id);
+
+  const out = {
+    version: Math.max(remote.version || 0, local.version || 0),
+    updatedAt: Math.max(remote.updatedAt || 0, local.updatedAt || 0),
+    fieldTimes: {},
+    deleted,
+    transactions: [...map.values()].sort((a, b) => b.ts - a.ts),
+  };
+  for (const k of FIELDS) {
+    const rt = fieldTime(remote, k);
+    const lt = fieldTime(local, k);
+    const pick = lt >= rt ? local : remote; // tie → local
+    out[k] = pick[k] ?? (pick === local ? remote[k] : local[k]);
+    out.fieldTimes[k] = Math.max(rt, lt);
+  }
+  return out;
+}
+
+/**
+ * The part of a blob that matters for "is the server up to date?": content
+ * only, no timestamps, so re-saving identical data compares equal. Used to skip
+ * pushes that would change nothing — previously every app launch re-uploaded
+ * the whole account and re-stamped it as the newest copy.
+ */
+export function contentSig(blob) {
+  if (!blob) return "";
+  return JSON.stringify([
+    blob.categories,
+    blob.settings,
+    blob.transactions,
+    blob.weekOverrides,
+    blob.weekSpendDays,
+    blob.deleted || {},
+  ]);
 }

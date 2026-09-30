@@ -42,3 +42,5 @@ $$;
 -- Expose only the functions to the public (anon) and signed-in (authenticated) roles.
 grant execute on function public.get_budget(text) to anon, authenticated;
 grant execute on function public.upsert_budget(text, jsonb) to anon, authenticated;
+
+-- App-wide statistics for the hidden admin screen live in supabase-admin.sql.

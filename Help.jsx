@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const card =
   "rounded-3xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm";
@@ -55,13 +55,39 @@ function Term({ name, children }) {
 }
 
 /**
+ * Counts a burst of taps and fires only on EXACTLY `count` taps whose first and
+ * last are within `windowMs`. A burst ends after `settleMs` without a tap, so
+ * the decision waits until tapping stops — that is what makes a sixth tap
+ * cancel it instead of the fifth having already opened the screen.
+ */
+function useSecretTaps(onUnlock, { count = 5, windowMs = 4000, settleMs = 1200 } = {}) {
+  const taps = useRef([]);
+  const timer = useRef(null);
+  useEffect(() => () => clearTimeout(timer.current), []); // leaving Help cancels a burst
+  return () => {
+    const now = Date.now();
+    taps.current.push(now);
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => {
+      const t = taps.current;
+      taps.current = [];
+      if (t.length === count && t[t.length - 1] - t[0] <= windowMs && onUnlock) {
+        navigator.vibrate?.(12);
+        onUnlock();
+      }
+    }, settleMs);
+  };
+}
+
+/**
  * Help / FAQ — explains every feature: logging, editing/deleting, the global
  * vs per-week settings, the dashboard glossary, and how the numbers are
  * calculated. One topic open at a time so it never feels like a wall of text.
  */
-export default function Help() {
+export default function Help({ onOpenAdmin }) {
   const [openId, setOpenId] = useState(null);
   const props = { openId, setOpenId };
+  const secretTap = useSecretTaps(onOpenAdmin);
 
   return (
     <div className="min-h-full space-y-3 bg-gray-50 px-4 pt-5 pb-4 dark:bg-gray-950">
@@ -247,13 +273,26 @@ export default function Help() {
           moment you're back online.
         </p>
         <p>
+          It's safe to close the app right after logging something, even offline — it's saved the
+          moment you tap Save and syncs the next time you open budge·. Using the same key on two
+          devices is fine too: their changes are combined, including deletions, rather than one
+          overwriting the other.
+        </p>
+        <p>
           If a new version is out and you still see the old one, use <b>Settings → Check for
           updates</b>. On iPhone, add budge· to your Home Screen so it reliably keeps your offline
           data.
         </p>
       </Topic>
 
-      <p className="px-1 pt-2 text-center text-xs text-gray-400">budge· — make it to Friday 🌱</p>
+      {/* Also the door to the admin screen: exactly five taps within four seconds.
+          Deliberately unmarked — no cursor, no pressed state, nothing to discover. */}
+      <p
+        onClick={secretTap}
+        className="select-none px-1 pt-2 text-center text-xs text-gray-400 [-webkit-tap-highlight-color:transparent] [touch-action:manipulation]"
+      >
+        budge· — make it to Friday 🌱
+      </p>
     </div>
   );
 }

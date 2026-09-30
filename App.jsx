@@ -15,6 +15,11 @@ import {
   setPending,
   isPending,
   mergeBlobs,
+  contentSig,
+  readJournal,
+  writeJournal,
+  clearJournal,
+  FIELDS,
 } from "./store.js";
 
 // Code-split the signed-in app away from the login path. A first-time visitor
@@ -31,6 +36,8 @@ const Dashboard = lazy(importDashboard);
 const History = lazy(importHistory);
 const Settings = lazy(importSettings);
 const Help = lazy(importHelp);
+// Admin is never prefetched: almost nobody opens it, so nobody else pays for it.
+const Admin = lazy(() => import("./Admin.jsx"));
 
 function prefetchScreens() {
   importQuickAdd();
@@ -78,110 +85,172 @@ export default function App() {
   const [transactions, setTransactions] = useState([]);
   const [weekOverrides, setWeekOverrides] = useState({});
   const [weekSpendDays, setWeekSpendDays] = useState({});
+  const [deleted, setDeleted] = useState({}); // tombstones: { txId: deletedAt }
 
   const loadedRef = useRef(false);
   const cachePartialRef = useRef(false);
+  const hashRef = useRef(null);
+  // The latest state, readable from async code (a push that started three
+  // renders ago must send what's on screen NOW, not what it closed over).
+  const stateRef = useRef(null);
+  stateRef.current = { categories, settings, transactions, weekOverrides, weekSpendDays, deleted };
+  // When each top-level field last changed, so a merge can keep the newer one
+  // per field. `seenRef` holds the objects last seen, to detect which changed.
+  const fieldTimesRef = useRef({});
+  const seenRef = useRef({});
+  // What the server is known to hold (content signature), and the last known
+  // server copy itself. A change whose signature matches needs no push.
+  const syncedSigRef = useRef(null);
+  const remoteRef = useRef(null);
+  const cachedSigRef = useRef(null);
 
   function buildBlob() {
+    const s = stateRef.current;
     return {
-      version: 4,
+      version: 5,
       updatedAt: Date.now(),
-      categories,
-      settings,
-      transactions,
-      weekOverrides,
-      weekSpendDays,
+      fieldTimes: { ...fieldTimesRef.current },
+      categories: s.categories,
+      settings: s.settings,
+      transactions: s.transactions,
+      weekOverrides: s.weekOverrides,
+      weekSpendDays: s.weekSpendDays,
+      deleted: s.deleted,
     };
   }
 
+  // Load a blob into state WITHOUT it registering as an edit: the field objects
+  // are recorded as already seen, and their timestamps come from the blob.
   function applyState(data) {
-    setCategories(data.categories || DEFAULT_CATEGORIES);
-    setSettings({ ...DEFAULT_SETTINGS, ...(data.settings || {}) });
-    setTransactions(Array.isArray(data.transactions) ? data.transactions : []);
-    setWeekOverrides(data.weekOverrides || {});
-    setWeekSpendDays(data.weekSpendDays || {});
+    const next = {
+      categories: data.categories || DEFAULT_CATEGORIES,
+      settings: { ...DEFAULT_SETTINGS, ...(data.settings || {}) },
+      weekOverrides: data.weekOverrides || {},
+      weekSpendDays: data.weekSpendDays || {},
+    };
+    const ft = {};
+    for (const k of FIELDS) ft[k] = data.fieldTimes?.[k] ?? data.updatedAt ?? 0;
+    fieldTimesRef.current = ft;
+    seenRef.current = next;
+    // Update the ref now, not at the next render: code that runs before React
+    // re-renders (the rest of a hydrate or push) must see what we just applied.
+    const transactions = Array.isArray(data.transactions) ? data.transactions : [];
+    stateRef.current = { ...next, transactions, deleted: data.deleted || {} };
+    setCategories(next.categories);
+    setSettings(next.settings);
+    setTransactions(transactions);
+    setWeekOverrides(next.weekOverrides);
+    setWeekSpendDays(next.weekSpendDays);
+    setDeleted(stateRef.current.deleted);
   }
 
-  // Load an account: show the local cache instantly (works offline), then
-  // reconcile with the server. Unsynced offline edits are merged, not lost.
-  async function hydrate(h, { createIfMissing }) {
+  // Load an account: paint the local copy instantly (works offline), then
+  // reconcile with the server by MERGING — never by replacing.
+  //
+  // The app is live from the moment the local copy paints. It used to wait for
+  // the server before it would save anything, so on a slow connection an entry
+  // typed while the spinner was hidden behind cached data went nowhere: not to
+  // the device, not to the server. Swipe the app away, and it was gone; wait,
+  // and the server's copy landed on top of it.
+  async function hydrate(h) {
+    // Only the newest hydrate may apply anything; an older one still awaiting
+    // the network bails out when it wakes.
+    const run = ++hydrateRunRef.current;
+    const stale = () => hydrateRunRef.current !== run || hashRef.current !== h;
     loadedRef.current = false;
+    hashRef.current = h;
+    syncedSigRef.current = null;
+    remoteRef.current = null;
+    cachedSigRef.current = null;
+    clearRetry();
 
-    // 1) Instant paint from cache if we have it — no network needed.
     const cached = await readCache(h);
-    if (cached?.blob?.categories) {
-      applyState(cached.blob);
-      cachePartialRef.current = cached.partial;
+    // A journal is what was on screen when the app was last hidden. It can be
+    // newer than IndexedDB if the app was killed before a write committed.
+    const journal = readJournal(h);
+    let local = cached?.blob || null;
+    if (journal?.categories) local = local ? mergeBlobs(local, journal) : journal;
+    if (stale()) return;
+
+    if (local?.categories) {
+      applyState(local);
+      cachePartialRef.current = !!cached?.partial;
+      if (!isPending(h) && !journal) syncedSigRef.current = contentSig(local);
+      if (!journal) cachedSigRef.current = contentSig(local);
+      loadedRef.current = true;
       setStatus("ready");
-      setSync(isPending(h) ? "error" : "saved");
+      setSync(isPending(h) || journal ? "error" : "saved");
     } else {
       setStatus("loading");
     }
 
-    // 2) Reconcile with Supabase.
     try {
       const remote = await loadBudget(h);
+      if (stale()) return;
       if (remote && remote.categories) {
-        if (cached?.blob && isPending(h)) {
-          // We had offline edits — union them with the server copy so nothing
-          // is lost, then push the merged result back.
-          const merged = mergeBlobs(remote, cached.blob);
-          applyState(merged);
-          cachePartialRef.current = false;
-          await writeCache(h, merged);
-          saveBudget(h, merged)
-            .then(() => setPending(h, false))
-            .catch(() => {}); // stays pending; the retry loop picks it up
-        } else {
-          applyState(remote);
-          cachePartialRef.current = false;
+        remoteRef.current = remote;
+        syncedSigRef.current = contentSig(remote);
+        cachePartialRef.current = false;
+        // Merge with what's on screen now — including anything typed while
+        // this request was in flight. The persist effect then pushes only if
+        // the result differs from what the server already has.
+        const merged = loadedRef.current ? mergeBlobs(remote, buildBlob()) : remote;
+        applyState(merged);
+        loadedRef.current = true;
+        setStatus("ready");
+        if (contentSig(merged) === syncedSigRef.current) {
           setPending(h, false);
-          writeCache(h, remote); // local mirror; nothing waits on it
+          setSync("saved");
         }
-      } else {
-        // No server data yet (new key / new account) — seed it.
-        const init = {
-          version: 4,
-          updatedAt: Date.now(),
+      } else if (!loadedRef.current) {
+        // No server data and nothing local: a new account. Paint immediately;
+        // the persist effect seeds the server in the background.
+        const now = Date.now();
+        applyState({
+          version: 5,
+          updatedAt: now,
+          fieldTimes: Object.fromEntries(FIELDS.map((k) => [k, now])),
           categories: DEFAULT_CATEGORIES,
           settings: DEFAULT_SETTINGS,
           transactions: [],
           weekOverrides: {},
           weekSpendDays: {},
-        };
-        // Paint immediately and seed the server in the background: a new account
-        // has nothing to lose, and blocking "ready" on an upsert meant staring at
-        // a spinner through a second round trip.
-        applyState(init);
-        cachePartialRef.current = false;
-        writeCache(h, init);
-        saveBudget(h, init)
-          .then(() => setPending(h, false))
-          .catch(() => setPending(h, true));
-      }
-      loadedRef.current = true;
-      setStatus("ready");
-      setSync("saved");
-    } catch (e) {
-      // Offline or server error. If the cache already painted, stay on it and
-      // mark unsynced; otherwise we have nothing to show.
-      if (cached?.blob?.categories) {
+          deleted: {},
+        });
         loadedRef.current = true;
         setStatus("ready");
+      } else {
+        // Local data but no server row (e.g. the first sync never landed):
+        // leave the signature null so the persist effect uploads it.
+        syncedSigRef.current = null;
+      }
+      lastPullRef.current = Date.now();
+    } catch (e) {
+      if (stale()) return;
+      // Offline or server error. With local data we carry on offline and keep
+      // retrying; without it there is nothing to show.
+      if (loadedRef.current) {
         setSync("error");
+        reconcileLaterRef.current = true;
+        scheduleRetry(h);
       } else {
         console.error(e);
         setStatus("error");
       }
     }
   }
+  // Set when the launch-time fetch failed: the next successful push must pull
+  // too, or edits made on another device while we were offline never arrive.
+  const reconcileLaterRef = useRef(false);
+  const hydrateRunRef = useRef(0);
+  const lastPullRef = useRef(0);
 
   // First load: auto sign-in if a key is stored, else show the Welcome screen.
   useEffect(() => {
     const h = getStoredHash();
     if (h) {
       setHash(h);
-      hydrate(h, { createIfMissing: true });
+      hydrate(h);
     } else {
       setStatus("auth");
     }
@@ -196,18 +265,19 @@ export default function App() {
 
   // --- Sync engine ------------------------------------------------------------
   //
-  // Every edit bumps a generation counter. A push records the generation it is
-  // carrying and only clears the "pending" flag if that is STILL the newest one.
-  // Without this, a slow push that finished after a newer edit had landed would
-  // clear the flag while unsynced data existed — and that data would never be
-  // flushed, because nothing knew it was owed.
+  // Every push is read → merge → write. Writing the device's copy straight over
+  // the server's (as it used to) was fine for one phone, but a phone that had
+  // been offline would erase whatever another device had synced meanwhile.
   //
-  // Pushes are single-flight: overlapping writes could otherwise land out of
-  // order and let an older payload win.
+  // Every edit bumps a generation counter. A push records the generation it is
+  // carrying and only clears the "pending" flag if that is STILL the newest one,
+  // so a slow push that lands after a newer edit can't mark that edit as synced.
+  // Pushes are single-flight; the in-flight one chains to the newest state.
   const genRef = useRef(0);
   const savingRef = useRef(false);
   const retryRef = useRef(null);
   const attemptRef = useRef(0);
+  const debounceRef = useRef(null);
 
   function clearRetry() {
     if (retryRef.current) {
@@ -217,58 +287,71 @@ export default function App() {
   }
 
   // Back off on repeated failure rather than hammering a network that is down:
-  // 5s, 10s, 20s, 40s, then every minute.
+  // 5s, 10s, 20s, 40s, then every minute. Scheduled even when the browser says
+  // it's offline — iOS in particular often never fires `online` for a
+  // home-screen app, so waiting for that event could mean waiting forever.
   function scheduleRetry(h) {
     clearRetry();
     const wait = Math.min(60000, 5000 * 2 ** Math.min(attemptRef.current, 3));
     attemptRef.current += 1;
     retryRef.current = setTimeout(() => {
       retryRef.current = null;
-      push(h, "retry");
+      push(h, { reason: "retry" });
     }, wait);
   }
 
-  async function push(h, reason) {
-    if (!h || !isPending(h)) return;
-    // Single-flight: overlapping pushes can land out of order and let an older
-    // payload win. The in-flight one chains to the newest state when it lands.
+  function needsSync(h) {
+    return isPending(h) || reconcileLaterRef.current;
+  }
+
+  async function push(h, { reason, keepalive = false } = {}) {
+    if (!h || hashRef.current !== h || !loadedRef.current || !needsSync(h)) return;
     if (savingRef.current) return;
-    // A known-offline device should not spend a request to find out.
     if (typeof navigator !== "undefined" && navigator.onLine === false) {
       setSync("error");
+      scheduleRetry(h);
       return;
     }
     savingRef.current = true;
     const gen = genRef.current;
-    setSync("saving");
+    // A pull with nothing of ours to send shouldn't flash "Saving…".
+    if (isPending(h)) setSync("saving");
     try {
-      const cached = await readCache(h);
-      let toSave = cached?.blob;
-      if (!toSave) return;
-      // If the cache was ever trimmed we may be missing already-synced rows, so
-      // reconcile with the server before writing, or we would delete them.
-      if (cachePartialRef.current || cached.partial) {
-        const remote = await loadBudget(h);
-        toSave = mergeBlobs(remote, toSave);
-        applyState(toSave);
-        cachePartialRef.current = false;
-        await writeCache(h, toSave);
+      // The hide-time flush can't afford a round trip — the page may be frozen
+      // before it returns — so it merges against the last server copy we saw.
+      // Anything newer on the server survives anyway: its own device still
+      // holds it and merges it back on its next sync.
+      const remote = keepalive && remoteRef.current ? remoteRef.current : await loadBudget(h);
+      if (hashRef.current !== h) return;
+      const local = buildBlob();
+      const merged = mergeBlobs(remote, local);
+      lastPullRef.current = Date.now();
+      // Nothing to add to the server (a pull that found us already current, or
+      // only another device's changes to take in): skip the write.
+      if (!remote || contentSig(merged) !== contentSig(remote)) {
+        await saveBudget(h, merged, { keepalive });
       }
-      await saveBudget(h, toSave);
+      if (hashRef.current !== h) return;
+      remoteRef.current = merged;
+      syncedSigRef.current = contentSig(merged);
+      reconcileLaterRef.current = false;
       attemptRef.current = 0;
       clearRetry();
       if (genRef.current === gen) {
-        // Nothing changed while we were pushing — we are genuinely in sync.
         setPending(h, false);
+        // Pull in what the server had that we didn't (another device's edits).
+        if (contentSig(merged) !== contentSig(local)) applyState(merged);
+        cachedSigRef.current = contentSig(merged);
+        writeCache(h, merged).then((r) => r === "full" && clearJournal(h));
         setSync("saved");
       } else {
-        // A newer edit landed mid-flight. Leave the flag set and push again —
-        // that edit's own debounce was swallowed by the single-flight guard
-        // above, so if we don't chain here nothing else will.
+        // A newer edit landed mid-flight: don't overwrite it with `merged`.
+        // Push again; that merge will fold the server's side in.
         setSync("saving");
-        setTimeout(() => push(h, "chain"), 0);
+        setTimeout(() => push(h, { reason: "chain" }), 0);
       }
     } catch {
+      if (hashRef.current !== h) return;
       setSync("error");
       scheduleRetry(h);
     } finally {
@@ -276,43 +359,78 @@ export default function App() {
     }
   }
 
-  // On any data change: flag pending FIRST (so a crash mid-write still knows
-  // something is owed), write through to the local cache, then debounce a push.
+  // Persist on every change: stamp which fields changed, write through to the
+  // device, and — only if the server doesn't already have this exact content —
+  // flag pending (synchronously, before any async write) and debounce a push.
   useEffect(() => {
     if (!loadedRef.current || !hash) return;
+    const now = Date.now();
+    const seen = seenRef.current;
+    const cur = { categories, settings, weekOverrides, weekSpendDays };
+    for (const k of FIELDS) if (seen[k] !== cur[k]) fieldTimesRef.current[k] = now;
+    seenRef.current = cur;
+
     const blob = buildBlob();
+    const sig = contentSig(blob);
+    if (sig !== cachedSigRef.current) {
+      cachedSigRef.current = sig;
+      // The journal is only a stopgap until IndexedDB has the same state.
+      writeCache(hash, blob).then((r) => r === "full" && clearJournal(hash));
+    }
+    if (sig === syncedSigRef.current) return;
     genRef.current += 1;
     setPending(hash, true);
-    writeCache(hash, blob);
     setSync("saving");
-    const t = setTimeout(() => push(hash, "edit"), 600);
-    return () => clearTimeout(t);
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => push(hash, { reason: "edit" }), 600);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categories, settings, transactions, weekOverrides, weekSpendDays, hash]);
+  }, [categories, settings, transactions, weekOverrides, weekSpendDays, deleted, hash]);
 
-  // Flush whenever the device plausibly regained connectivity. `online` alone is
-  // not enough: it tracks the network interface, not whether Supabase is
-  // reachable, and a phone that slept through a reconnect may never fire it. So
-  // we also try when the app is brought back to the foreground.
+  // Connectivity & lifecycle. `online` alone is not enough: it tracks the
+  // network interface, not whether Supabase is reachable, and a phone that
+  // slept through a reconnect may never fire it. So we also try on focus.
+  //
+  // Going to the background is the last moment we're guaranteed to run — on a
+  // phone, "closing" the app is usually just hiding it, and the OS may kill it
+  // later without another word. So on hide we (1) write a synchronous journal
+  // copy so nothing depends on an async write finishing, and (2) flush now,
+  // skipping the debounce, with a request that may outlive the page.
   useEffect(() => {
     if (!hash) return;
     const onOnline = () => {
       attemptRef.current = 0; // a fresh connection deserves an immediate try
-      push(hash, "online");
+      push(hash, { reason: "online" });
     };
-    const onVisible = () => {
-      if (document.visibilityState === "visible") push(hash, "visible");
+    const onHide = () => {
+      if (!loadedRef.current || hashRef.current !== hash) return;
+      if (isPending(hash)) {
+        writeJournal(hash, buildBlob());
+        clearTimeout(debounceRef.current);
+        push(hash, { reason: "hide", keepalive: true });
+      }
     };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") onHide();
+      else {
+        attemptRef.current = 0;
+        // Back from the background: also pick up anything another device
+        // synced meanwhile, at most once a minute.
+        if (Date.now() - lastPullRef.current > 60000) reconcileLaterRef.current = true;
+        push(hash, { reason: "visible" });
+      }
+    };
+    const onFocus = () => push(hash, { reason: "focus" });
     window.addEventListener("online", onOnline);
-    window.addEventListener("focus", onVisible);
-    document.addEventListener("visibilitychange", onVisible);
-    // Anything left over from a previous session flushes on mount.
-    push(hash, "mount");
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("pagehide", onHide);
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
       window.removeEventListener("online", onOnline);
-      window.removeEventListener("focus", onVisible);
-      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("pagehide", onHide);
+      document.removeEventListener("visibilitychange", onVisibility);
       clearRetry();
+      clearTimeout(debounceRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hash]);
@@ -324,7 +442,7 @@ export default function App() {
     setAuthError("");
     storeHash(h);
     setHash(h);
-    await hydrate(h, { createIfMissing: false });
+    await hydrate(h);
     setView("dashboard");
   }
   async function createAccount() {
@@ -332,7 +450,7 @@ export default function App() {
     setAuthError("");
     storeHash(h);
     setHash(h);
-    await hydrate(h, { createIfMissing: true });
+    await hydrate(h);
     setView("add");
   }
   function signOut() {
@@ -343,8 +461,10 @@ export default function App() {
       /* ignore */
     }
     loadedRef.current = false;
+    hashRef.current = null;
     setHash(null);
     setTransactions([]);
+    setDeleted({});
     setWeekOverrides({});
     setWeekSpendDays({});
     setStatus("auth");
@@ -358,15 +478,19 @@ export default function App() {
       categoryId,
       note,
       ts: Date.now(),
+      mt: Date.now(),
     };
     setTransactions((prev) => [tx, ...prev]);
     setView("dashboard");
   }
   function deleteTransaction(tx) {
     setTransactions((prev) => prev.filter((t) => t.id !== tx.id));
+    setDeleted((prev) => ({ ...prev, [tx.id]: Date.now() }));
   }
   function updateTransaction(updated) {
-    setTransactions((prev) => prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t)));
+    setTransactions((prev) =>
+      prev.map((t) => (t.id === updated.id ? { ...t, ...updated, mt: Date.now() } : t))
+    );
   }
 
   // --- Categories ---
@@ -383,7 +507,7 @@ export default function App() {
       const remaining = prev.filter((c) => c.id !== id);
       const fallback = remaining[0].id;
       setTransactions((txs) =>
-        txs.map((t) => (t.categoryId === id ? { ...t, categoryId: fallback } : t))
+        txs.map((t) => (t.categoryId === id ? { ...t, categoryId: fallback, mt: Date.now() } : t))
       );
       return remaining;
     });
@@ -446,7 +570,19 @@ export default function App() {
           const s = JSON.parse(reader.result);
           if (s.categories) setCategories(s.categories);
           if (s.settings) setSettings({ ...DEFAULT_SETTINGS, ...s.settings });
-          if (Array.isArray(s.transactions)) setTransactions(s.transactions);
+          if (Array.isArray(s.transactions)) {
+            // Entries the backup doesn't have are deleted, not just hidden —
+            // otherwise the next sync would merge them straight back in.
+            const keep = new Set(s.transactions.map((t) => t.id));
+            const now = Date.now();
+            setDeleted((prev) => {
+              const next = { ...prev };
+              for (const t of stateRef.current.transactions) if (!keep.has(t.id)) next[t.id] = now;
+              for (const id of keep) delete next[id];
+              return next;
+            });
+            setTransactions(s.transactions.map((t) => ({ ...t, mt: now })));
+          }
           if (s.weekOverrides) setWeekOverrides(s.weekOverrides);
           if (s.weekSpendDays) setWeekSpendDays(s.weekSpendDays);
         } catch {
@@ -477,7 +613,7 @@ export default function App() {
               Check your connection — your changes are safe.
             </p>
             <button
-              onClick={() => hash && hydrate(hash, { createIfMissing: true })}
+              onClick={() => hash && hydrate(hash)}
               className="rounded-2xl bg-matcha px-5 py-3 font-semibold text-white active:scale-95"
             >
               Retry
@@ -543,11 +679,12 @@ export default function App() {
             onImport={importData}
           />
         )}
-        {view === "help" && <Help />}
+        {view === "help" && <Help onOpenAdmin={() => setView("admin")} />}
+        {view === "admin" && <Admin hash={hash} onBack={() => setView("help")} />}
         </Suspense>
       </div>
 
-      <BottomNav view={view} onChange={setView} />
+      <BottomNav view={view === "admin" ? "help" : view} onChange={setView} />
       <InstallPrompt />
     </div>
   );
