@@ -10,26 +10,25 @@
    --------------------------------------------------------------------------- */
 :root {
   color-scheme: light;
-  --page: #f2f4f1;
-  --matcha: 74 125 77; /* #4A7D4D — passes AA as text on white */
-  --matcha-press: 61 107 64;
+  --page: rgb(var(--g-50));
   --ease: cubic-bezier(0.23, 1, 0.32, 1);
 
   --surface: #ffffff;
-  --hairline: rgba(16, 26, 20, 0.07);
+  --hairline: rgb(var(--g-900) / 0.07);
 
   --glass: rgba(255, 255, 255, 0.62);
   --glass-strong: rgba(255, 255, 255, 0.82);
-  --glass-edge: rgba(16, 26, 20, 0.08);
+  --glass-edge: rgb(var(--g-900) / 0.08);
   --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.7);
 
-  --shadow-card: 0 1px 2px rgba(16, 26, 20, 0.04), 0 4px 12px rgba(16, 26, 20, 0.04),
-    0 12px 40px rgba(16, 26, 20, 0.05);
-  --shadow-float: 0 1px 2px rgba(16, 26, 20, 0.06), 0 8px 24px rgba(16, 26, 20, 0.08),
-    0 12px 48px rgba(16, 26, 20, 0.08);
+  --shadow-card: 0 1px 2px rgb(var(--g-900) / 0.04), 0 4px 12px rgb(var(--g-900) / 0.04),
+    0 12px 40px rgb(var(--g-900) / 0.05);
+  --shadow-float: 0 1px 2px rgb(var(--g-900) / 0.06), 0 8px 24px rgb(var(--g-900) / 0.08),
+    0 12px 48px rgb(var(--g-900) / 0.08);
 
-  --ambient-a: rgba(91, 140, 90, 0.16);
-  --ambient-b: rgba(245, 166, 35, 0.07);
+  /* the ambient wash takes the theme's accent (palettes.css may override) */
+  --ambient-a-default: rgb(var(--accent) / 0.13);
+  --ambient-b: rgba(245, 166, 35, 0.06);
 
   /* clearance for the floating tab bar */
   --nav-clear: calc(5.5rem + env(safe-area-inset-bottom));
@@ -37,15 +36,13 @@
 
 .dark {
   color-scheme: dark;
-  --page: #0a0e0c;
-  --matcha: 102 153 106; /* #66996A — brighter so it reads on graphite */
-  --matcha-press: 86 133 90;
+  --page: rgb(var(--g-950));
 
-  --surface: #141b17;
+  --surface: rgb(var(--g-900));
   --hairline: rgba(255, 255, 255, 0.06);
 
-  --glass: rgba(28, 36, 32, 0.55);
-  --glass-strong: rgba(24, 31, 27, 0.8);
+  --glass: rgb(var(--g-800) / 0.6);
+  --glass-strong: rgb(var(--g-900) / 0.82);
   --glass-edge: rgba(255, 255, 255, 0.1);
   --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 
@@ -53,8 +50,8 @@
   --shadow-float: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 30px rgba(0, 0, 0, 0.35),
     0 18px 56px rgba(0, 0, 0, 0.45);
 
-  --ambient-a: rgba(91, 140, 90, 0.17);
-  --ambient-b: rgba(245, 166, 35, 0.045);
+  --ambient-a-default: rgb(var(--accent) / 0.15);
+  --ambient-b: rgba(245, 166, 35, 0.04);
 }
 
 html,
@@ -83,7 +80,7 @@ body::before {
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(60rem 36rem at 8% -6%, var(--ambient-a), transparent 60%),
+    radial-gradient(60rem 36rem at 8% -6%, var(--ambient-a, var(--ambient-a-default)), transparent 60%),
     radial-gradient(48rem 32rem at 105% 38%, var(--ambient-b), transparent 60%);
 }
 
@@ -217,8 +214,8 @@ html.theme-anim *::after {
 }
 @media (prefers-contrast: more) {
   :root {
-    --hairline: rgba(16, 26, 20, 0.25);
-    --glass-edge: rgba(16, 26, 20, 0.35);
+    --hairline: rgb(var(--g-900) / 0.25);
+    --glass-edge: rgb(var(--g-900) / 0.35);
   }
   .dark {
     --hairline: rgba(255, 255, 255, 0.25);

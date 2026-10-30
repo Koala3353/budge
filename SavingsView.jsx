@@ -149,8 +149,8 @@ export default function SavingsView({ ledger, symbol, rangeRows, rangeLabel, car
         </p>
 
         <div className="mt-4 grid grid-cols-2 gap-3">
-          <div className="min-w-0 rounded-2xl bg-matcha/10 px-4 py-3">
-            <p className="text-xs font-medium text-matcha">Put aside</p>
+          <div className="min-w-0 rounded-2xl bg-accent/10 px-4 py-3">
+            <p className="text-xs font-medium text-accent-ink">Put aside</p>
             <p className="mt-0.5 truncate font-mono text-[clamp(0.95rem,4.6vw,1.125rem)] font-bold tabular-nums" style={{ color: GOOD }}>
               {fitMoney(saved, symbol, 9)}
             </p>

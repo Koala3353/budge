@@ -31,11 +31,11 @@ function Switch({ on, onChange, label }) {
       aria-label={label}
       onClick={() => onChange(!on)}
       className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
-        on ? "bg-matcha" : "bg-gray-200 dark:bg-gray-700"
+        on ? "bg-accent" : "bg-gray-200 dark:bg-gray-700"
       }`}
     >
       <span
-        className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+        className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full shadow transition-transform ${on ? "bg-on-accent" : "bg-white"} ${
           on ? "translate-x-5" : "translate-x-0"
         }`}
       />
@@ -180,7 +180,7 @@ export default function ShareSheet({ data, symbol, onClose }) {
         <button
           onClick={share}
           disabled={busy}
-          className="w-full rounded-2xl bg-matcha py-3.5 text-base font-semibold text-white transition active:scale-[0.99] disabled:opacity-60"
+          className="w-full rounded-2xl bg-accent py-3.5 text-base font-semibold text-on-accent transition active:scale-[0.99] disabled:opacity-60"
         >
           {busy ? "Opening…" : "Share"}
         </button>

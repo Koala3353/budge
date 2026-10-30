@@ -34,7 +34,7 @@ export default function CategoryEditor({ category, canDelete, onSave, onDelete, 
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Groceries"
-              className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2.5 text-gray-900 dark:text-gray-50 focus:outline-none focus:ring-2 focus:ring-matcha/40"
+              className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2.5 text-gray-900 dark:text-gray-50 focus:outline-none focus:ring-2 focus:ring-accent/40"
             />
           </div>
         </div>
@@ -47,7 +47,7 @@ export default function CategoryEditor({ category, canDelete, onSave, onDelete, 
             value={icon}
             onChange={(e) => setIcon([...e.target.value].slice(-2).join(""))}
             placeholder="🍜"
-            className="w-24 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2.5 text-center text-2xl focus:outline-none focus:ring-2 focus:ring-matcha/40"
+            className="w-24 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2.5 text-center text-2xl focus:outline-none focus:ring-2 focus:ring-accent/40"
           />
         </div>
 
@@ -74,7 +74,7 @@ export default function CategoryEditor({ category, canDelete, onSave, onDelete, 
             onClick={() => onSave({ id: category?.id, name: name.trim(), icon: icon.trim(), color })}
             className={`w-full rounded-2xl py-3.5 text-base font-semibold transition ${
               valid
-                ? "bg-matcha text-white active:scale-[0.99]"
+                ? "bg-accent text-on-accent active:scale-[0.99]"
                 : "bg-gray-200 dark:bg-white/10 text-gray-400 cursor-not-allowed"
             }`}
           >

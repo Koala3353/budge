@@ -111,7 +111,7 @@ function Tile({ label, value, sub, subColor, accent, onClick, action }) {
     <Comp onClick={onClick} className={`${card} min-w-0 p-4 text-left ${onClick ? "active:scale-[0.99]" : ""}`}>
       <div className="flex items-center justify-between gap-1">
         <p className="min-w-0 truncate text-xs font-medium text-gray-500 dark:text-gray-400">{label}</p>
-        {action && <span className="text-xs font-semibold text-matcha">{action}</span>}
+        {action && <span className="text-xs font-semibold text-accent-ink">{action}</span>}
       </div>
       {/* Fluid down to 320px: a six-figure peso amount has no business being
           24px wide in a half-width card. */}
@@ -320,9 +320,9 @@ export default function Dashboard({
         <>
           {/* gentle reminder if nothing logged today */}
           {today === 0 && transactions.length > 0 && !hideNudge && (
-            <div className="mb-4 flex items-center justify-between rounded-2xl bg-matcha/10 px-4 py-3">
-              <span className="text-sm font-medium text-matcha">📝 Nothing logged today — got any spends?</span>
-              <button onClick={() => setHideNudge(true)} className="text-matcha/70 active:opacity-60">✕</button>
+            <div className="mb-4 flex items-center justify-between rounded-2xl bg-accent/10 px-4 py-3">
+              <span className="text-sm font-medium text-accent-ink">📝 Nothing logged today — got any spends?</span>
+              <button onClick={() => setHideNudge(true)} className="text-accent-ink/70 active:opacity-60">✕</button>
             </div>
           )}
 
@@ -331,7 +331,7 @@ export default function Dashboard({
             <div className="mb-4 flex items-center justify-between">
               <div className="text-sm font-medium text-gray-500 dark:text-gray-400">
                 Budget {formatMoney(allowance, symbol)}
-                {hasOverride && <span className="ml-1 text-matcha">· adjusted</span>}
+                {hasOverride && <span className="ml-1 text-accent-ink">· adjusted</span>}
               </div>
               <button
                 onClick={() => { setDraft((allowance / 100).toString()); setAdjustOpen(true); }}
@@ -362,7 +362,7 @@ export default function Dashboard({
                     Over for now — let's reset next week 🌱
                   </div>
                 ) : (
-                  <div className={`rounded-2xl px-4 py-3 text-center text-sm font-medium ${pct >= 0.8 ? "bg-amber-400/10 text-amber-600 dark:text-amber-400" : "bg-matcha/10 text-matcha"}`}>
+                  <div className={`rounded-2xl px-4 py-3 text-center text-sm font-medium ${pct >= 0.8 ? "bg-amber-400/10 text-amber-600 dark:text-amber-400" : "bg-accent/10 text-accent-ink"}`}>
                     Daily limit: <span className="font-bold">{formatMoney(dailyLimit, symbol)}/day</span> · {spendDaysLeft} spend day{spendDaysLeft === 1 ? "" : "s"} left
                   </div>
                 )}
@@ -432,7 +432,7 @@ export default function Dashboard({
             {isEmpty ? (
               <div className="py-6 text-center">
                 <p className="text-sm text-gray-500 dark:text-gray-400">Nothing logged yet this week.</p>
-                <button onClick={onAdd} className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-matcha px-5 py-3 font-semibold text-white active:scale-95">
+                <button onClick={onAdd} className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-accent px-5 py-3 font-semibold text-on-accent active:scale-95">
                   <PlusIcon size={20} /> Add an expense
                 </button>
               </div>
@@ -441,7 +441,7 @@ export default function Dashboard({
                 <CategoryBreakdown breakdown={breakdown} symbol={symbol} />
                 <button
                   onClick={() => setTab("categories")}
-                  className="mt-4 w-full rounded-2xl bg-gray-50 py-2.5 text-sm font-semibold text-matcha active:scale-[0.99] dark:bg-white/5"
+                  className="mt-4 w-full rounded-2xl bg-gray-50 py-2.5 text-sm font-semibold text-accent-ink active:scale-[0.99] dark:bg-white/5"
                 >
                   See every category →
                 </button>
@@ -454,7 +454,7 @@ export default function Dashboard({
             <section className={`${card} mb-4 p-5`}>
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="text-base font-bold text-gray-900 dark:text-gray-50">Last week recap</h2>
-                <button onClick={() => setShareOpen(true)} className="rounded-full bg-matcha/10 px-3 py-1.5 text-xs font-semibold text-matcha active:scale-95">Share</button>
+                <button onClick={() => setShareOpen(true)} className="rounded-full bg-accent/10 px-3 py-1.5 text-xs font-semibold text-accent-ink active:scale-95">Share</button>
               </div>
               <p className="text-sm text-gray-600 dark:text-gray-300">
                 Spent <span className="font-mono font-semibold text-gray-900 dark:text-gray-50">{formatMoney(recap.spent, symbol)}</span> of {formatMoney(recap.allowance, symbol)} —{" "}
@@ -472,7 +472,7 @@ export default function Dashboard({
           <section className={`${card} p-5`}>
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-base font-bold text-gray-900 dark:text-gray-50">Recent</h2>
-              <button onClick={() => onViewAll?.()} className="text-sm font-semibold text-matcha active:opacity-70">View all</button>
+              <button onClick={() => onViewAll?.()} className="text-sm font-semibold text-accent-ink active:opacity-70">View all</button>
             </div>
             {recent.length === 0 ? (
               <p className="py-4 text-center text-sm text-gray-500 dark:text-gray-400">No transactions yet.</p>
@@ -604,7 +604,7 @@ export default function Dashboard({
             <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">Tap a bar to read it.</p>
             <HistoryChart data={history} symbol={symbol} />
             <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-gray-500 dark:text-gray-400">
-              <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-sm bg-matcha" /> within budget</span>
+              <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-sm bg-[#5B8C5A]" /> within budget</span>
               <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: DANGER }} /> over budget</span>
               <span className="flex items-center gap-1.5">
                 <svg width="14" height="6" aria-hidden="true"><line x1="0" y1="3" x2="14" y2="3" stroke={DANGER} strokeWidth="1.5" strokeDasharray="2 3" /></svg>
@@ -713,7 +713,7 @@ export default function Dashboard({
           </div>
           <div className="mt-4 space-y-2">
             <button onClick={() => { onSetWeekAllowance(curKey, parseAmount(draft)); setAdjustOpen(false); }}
-              className="w-full rounded-2xl bg-matcha py-3.5 text-base font-semibold text-white active:scale-[0.99]">Save this week's budget</button>
+              className="w-full rounded-2xl bg-accent py-3.5 text-base font-semibold text-on-accent active:scale-[0.99]">Save this week's budget</button>
             {hasOverride && (
               <button onClick={() => { onSetWeekAllowance(curKey, null); setAdjustOpen(false); }}
                 className="w-full rounded-2xl py-3 text-base font-medium text-gray-500 dark:text-gray-400">Reset to default</button>
@@ -738,7 +738,7 @@ export default function Dashboard({
           </div>
           <div className="mt-5 space-y-2">
             <button onClick={() => { onSetWeekSpendDays(curKey, daysDraft); setDaysOpen(false); }}
-              className="w-full rounded-2xl bg-matcha py-3.5 text-base font-semibold text-white active:scale-[0.99]">Save for this week</button>
+              className="w-full rounded-2xl bg-accent py-3.5 text-base font-semibold text-on-accent active:scale-[0.99]">Save for this week</button>
             {hasDaysOverride && (
               <button onClick={() => { onSetWeekSpendDays(curKey, null); setDaysOpen(false); }}
                 className="w-full rounded-2xl py-3 text-base font-medium text-gray-500 dark:text-gray-400">Use default ({defaultSpendDays})</button>

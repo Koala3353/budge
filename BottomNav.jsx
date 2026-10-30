@@ -48,8 +48,8 @@ export default function BottomNav({ view, onChange }) {
                 className="relative flex flex-1 items-center justify-center"
               >
                 <span
-                  className={`flex h-12 w-12 items-center justify-center rounded-full text-white shadow-float
-                    active:scale-95 ${active ? "bg-matcha-dark" : "bg-matcha"}`}
+                  className={`flex h-12 w-12 items-center justify-center rounded-full text-on-accent shadow-float
+                    active:scale-95 ${active ? "bg-accent-press" : "bg-accent"}`}
                 >
                   <Icon size={26} />
                 </span>
@@ -62,7 +62,7 @@ export default function BottomNav({ view, onChange }) {
               onClick={() => onChange(key)}
               aria-current={active ? "page" : undefined}
               className={`relative flex min-h-[52px] flex-1 flex-col items-center justify-center gap-0.5 rounded-full active:scale-95
-                ${active ? "text-matcha" : "text-gray-500 dark:text-gray-400"}`}
+                ${active ? "text-accent-ink" : "text-gray-500 dark:text-gray-400"}`}
             >
               <Icon size={22} />
               <span className={`text-[10px] leading-none ${active ? "font-semibold" : "font-medium"}`}>{label}</span>

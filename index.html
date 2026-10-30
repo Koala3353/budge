@@ -6,17 +6,18 @@
       name="viewport"
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
-    <meta name="theme-color" content="#F2F4F1" />
+    <meta name="theme-color" content="#F9F9F9" />
     <!-- Apply the saved appearance before first paint, so dark mode never
          flashes light. Mirrors theme.js. -->
     <script>
       (function () {
-        var t = null;
-        try { t = localStorage.getItem("budge.theme"); } catch (e) {}
+        var t = null, p = null;
+        try { t = localStorage.getItem("budge.theme"); p = localStorage.getItem("budge.palette"); } catch (e) {}
+        if (p && /^[a-z]+$/.test(p)) document.documentElement.setAttribute("data-palette", p);
         var dark = t === "dark" || (t !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
         if (dark) document.documentElement.classList.add("dark");
         var m = document.querySelector('meta[name="theme-color"]');
-        if (m) m.setAttribute("content", dark ? "#0A0E0C" : "#F2F4F1");
+        if (m) m.setAttribute("content", dark ? "#111111" : "#F9F9F9"); // refined by theme.js once styles load
       })();
     </script>
     <!-- The first thing the app does after booting is call Supabase. Warming DNS

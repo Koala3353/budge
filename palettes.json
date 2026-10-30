@@ -1,0 +1,80 @@
+[
+ {
+  "key": "graphite",
+  "name": "Graphite",
+  "gloss": "Ink",
+  "light": {
+   "page": "#f9f9f9",
+   "accent": "#202020"
+  },
+  "dark": {
+   "page": "#111111",
+   "accent": "#eeeeee"
+  }
+ },
+ {
+  "key": "matcha",
+  "name": "Matcha",
+  "gloss": "Matcha",
+  "light": {
+   "page": "#F2F4F1",
+   "accent": "#4A7D4D"
+  },
+  "dark": {
+   "page": "#0A0E0C",
+   "accent": "#66996A"
+  }
+ },
+ {
+  "key": "pandan",
+  "name": "Pandan",
+  "gloss": "Jade",
+  "light": {
+   "page": "#f7f9f8",
+   "accent": "#208368"
+  },
+  "dark": {
+   "page": "#101211",
+   "accent": "#29a383"
+  }
+ },
+ {
+  "key": "dagat",
+  "name": "Dagat",
+  "gloss": "Teal",
+  "light": {
+   "page": "#f9f9fb",
+   "accent": "#008573"
+  },
+  "dark": {
+   "page": "#111113",
+   "accent": "#12a594"
+  }
+ },
+ {
+  "key": "tinta",
+  "name": "Tinta",
+  "gloss": "Indigo",
+  "light": {
+   "page": "#f9f9fb",
+   "accent": "#3e63dd"
+  },
+  "dark": {
+   "page": "#111113",
+   "accent": "#3e63dd"
+  }
+ },
+ {
+  "key": "ube",
+  "name": "Ube",
+  "gloss": "Plum",
+  "light": {
+   "page": "#faf9fb",
+   "accent": "#ab4aba"
+  },
+  "dark": {
+   "page": "#121113",
+   "accent": "#ab4aba"
+  }
+ }
+]

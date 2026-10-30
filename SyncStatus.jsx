@@ -28,7 +28,7 @@ export default function SyncStatus({ sync }) {
   } else if (sync === "error") {
     dot = "#F59E0B"; label = "Offline"; cls = "text-amber-500 dark:text-amber-400";
   } else if (sync === "saved" && savedVisible) {
-    dot = "#5B8C5A"; label = "Saved"; cls = "text-matcha";
+    dot = "#5B8C5A"; label = "Saved"; cls = "text-accent-ink";
   } else {
     return null; // idle / long-since-synced → show nothing
   }

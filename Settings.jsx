@@ -2,7 +2,8 @@ import { useState } from "react";
 import { parseAmount } from "./budget.js";
 import CategoryEditor from "./CategoryEditor.jsx";
 import Modal from "./Modal.jsx";
-import { getTheme, setTheme } from "./theme.js";
+import { getTheme, setTheme, getPalette, setPalette } from "./theme.js";
+import PALETTES from "./palettes.json";
 
 const WEEK_DAYS = [
   { value: 0, label: "Sunday" },
@@ -11,7 +12,7 @@ const WEEK_DAYS = [
 
 const SYNC_LABEL = {
   saving: { text: "Saving…", color: "text-gray-400" },
-  saved: { text: "All changes synced", color: "text-matcha" },
+  saved: { text: "All changes synced", color: "text-accent-ink" },
   error: { text: "Offline — will retry", color: "text-red-500" },
   idle: { text: "", color: "text-gray-400" },
 };
@@ -45,7 +46,7 @@ const DEFAULT_RANGES = [
 const card =
   "surface"; // solid card: hairline edge + soft layered shadow (index.css)
 const input =
-  "w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-3 text-gray-900 dark:text-gray-50 focus:outline-none focus:ring-2 focus:ring-matcha/40";
+  "w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-3 text-gray-900 dark:text-gray-50 focus:outline-none focus:ring-2 focus:ring-accent/40";
 
 /** Settings: account, default weekly allowance, week start, currency, category CRUD, backups. */
 export default function Settings({
@@ -123,7 +124,7 @@ export default function Settings({
             </code>
             <button
               onClick={copyHash}
-              className="rounded-lg bg-matcha px-4 py-2 text-xs font-semibold text-white active:scale-95"
+              className="rounded-lg bg-accent px-4 py-2 text-xs font-semibold text-on-accent active:scale-95"
             >
               {copied ? "Copied!" : "Copy Key"}
             </button>
@@ -236,7 +237,7 @@ export default function Settings({
               </span>
               <span className="flex-1 font-medium text-gray-900 dark:text-gray-50">{c.name}</span>
               <span className="h-4 w-4 rounded-full" style={{ backgroundColor: c.color }} />
-              <span className="text-sm font-medium text-matcha">Edit</span>
+              <span className="text-sm font-medium text-accent-ink">Edit</span>
             </button>
           ))}
         </div>
@@ -360,7 +361,7 @@ export default function Settings({
           className={`${card} flex w-full items-center justify-center gap-2 py-3.5 text-sm font-semibold text-gray-900 active:scale-[0.99] disabled:opacity-60 dark:text-gray-50`}
         >
           {updating && (
-            <span className="h-4 w-4 animate-spin rounded-full border-2 border-matcha border-t-transparent" />
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-accent border-t-transparent" />
           )}
           {updating ? "Updating…" : "Check for updates"}
         </button>
@@ -398,7 +399,7 @@ export default function Settings({
             value={hashInput}
             onChange={(e) => setHashInput(e.target.value)}
             placeholder="account key"
-            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-3 font-mono text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-matcha/40 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-50"
+            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-3 font-mono text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-accent/40 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-50"
           />
           <button
             disabled={!hashInput.trim()}
@@ -408,7 +409,7 @@ export default function Settings({
             }}
             className={`mt-4 w-full rounded-2xl py-3.5 text-base font-semibold transition ${
               hashInput.trim()
-                ? "bg-matcha text-white active:scale-[0.99]"
+                ? "bg-accent text-on-accent active:scale-[0.99]"
                 : "cursor-not-allowed bg-gray-200 text-gray-400 dark:bg-gray-800"
             }`}
           >
@@ -455,7 +456,7 @@ export default function Settings({
                 onNewAccount();
                 setAccountModal(null);
               }}
-              className="w-full rounded-2xl bg-matcha py-3.5 text-base font-semibold text-white active:scale-[0.99]"
+              className="w-full rounded-2xl bg-accent py-3.5 text-base font-semibold text-on-accent active:scale-[0.99]"
             >
               Create new account
             </button>
@@ -472,15 +473,59 @@ export default function Settings({
   );
 }
 
-/** Per-device theme. Not synced: your phone can be dark while your laptop isn't. */
+/**
+ * Per-device appearance: light/dark and the colour theme. Not synced, so your
+ * phone can be dark Ube while your laptop is light Graphite.
+ */
 function Appearance() {
   const [theme, setLocal] = useState(getTheme);
+  const [palette, setPal] = useState(getPalette);
   function choose(v) {
     setLocal(v);
     setTheme(v);
   }
+  function pick(p) {
+    setPal(p);
+    setPalette(p);
+  }
   return (
     <div className={`${card} p-4`}>
+      <p className="text-sm font-semibold text-gray-900 dark:text-gray-50">Colour</p>
+      <div role="radiogroup" aria-label="Colour theme" className="mb-4 mt-3 grid grid-cols-3 gap-2">
+        {PALETTES.map((p) => {
+          const on = palette === p.key;
+          return (
+            <button
+              key={p.key}
+              role="radio"
+              aria-checked={on}
+              onClick={() => pick(p.key)}
+              className={`flex flex-col items-center gap-1.5 rounded-2xl px-1 py-2.5 active:scale-[0.97] ${
+                on ? "bg-gray-100 dark:bg-white/[0.08]" : ""
+              }`}
+            >
+              {/* light half / dark half, each showing that mode's page and accent */}
+              <span
+                className={`relative flex h-10 w-10 overflow-hidden rounded-full ring-offset-2 ring-offset-white dark:ring-offset-gray-900 ${
+                  on ? "ring-2 ring-gray-900 dark:ring-gray-50" : "ring-1 ring-gray-900/10 dark:ring-white/15"
+                }`}
+              >
+                <span className="flex flex-1 items-center justify-end pr-0.5" style={{ background: p.light.page }}>
+                  <span className="h-3.5 w-3.5 rounded-full" style={{ background: p.light.accent }} />
+                </span>
+                <span className="flex flex-1 items-center justify-start pl-0.5" style={{ background: p.dark.page }}>
+                  <span className="h-3.5 w-3.5 rounded-full" style={{ background: p.dark.accent }} />
+                </span>
+              </span>
+              <span className={`text-xs ${on ? "font-semibold text-gray-900 dark:text-gray-50" : "font-medium text-gray-500 dark:text-gray-400"}`}>
+                {p.name}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <p className="text-sm font-semibold text-gray-900 dark:text-gray-50">Mode</p>
+      <div className="mt-3" />
       <div role="radiogroup" aria-label="Appearance" className="flex gap-1 rounded-2xl bg-gray-100 p-1 dark:bg-white/5">
         {APPEARANCE.map((a) => (
           <button
@@ -499,7 +544,8 @@ function Appearance() {
         ))}
       </div>
       <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-        {theme === "system" ? "Follows your device's light or dark setting." : "Set for this device only."}
+        {theme === "system" ? "Follows your device's light or dark setting." : "Set for this device only."} Money
+        colours stay the same in every theme: green under budget, amber close, red over.
       </p>
     </div>
   );
@@ -530,11 +576,11 @@ function Toggle({ label, hint, on, onChange }) {
         aria-label={label}
         onClick={() => onChange(!on)}
         className={`relative mt-0.5 h-6 w-11 shrink-0 rounded-full transition-colors ${
-          on ? "bg-matcha" : "bg-gray-200 dark:bg-gray-700"
+          on ? "bg-accent" : "bg-gray-200 dark:bg-gray-700"
         }`}
       >
         <span
-          className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+          className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full shadow transition-transform ${on ? "bg-on-accent" : "bg-white"} ${
             on ? "translate-x-5" : "translate-x-0"
           }`}
         />

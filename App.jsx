@@ -57,7 +57,7 @@ if (getStoredHash()) prefetchScreens();
 
 const Spinner = () => (
   <div className="flex min-h-screen items-center justify-center">
-    <div className="h-8 w-8 animate-spin rounded-full border-2 border-matcha border-t-transparent" />
+    <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
   </div>
 );
 
@@ -603,7 +603,7 @@ export default function App() {
       <div className="flex min-h-screen items-center justify-center px-6 text-center">
         {status === "loading" ? (
           <div className="flex flex-col items-center gap-3 text-gray-500 dark:text-gray-400">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-matcha border-t-transparent" />
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
             <p className="text-sm">Loading your budget…</p>
           </div>
         ) : (
@@ -614,7 +614,7 @@ export default function App() {
             </p>
             <button
               onClick={() => hash && hydrate(hash)}
-              className="rounded-2xl bg-matcha px-5 py-3 font-semibold text-white active:scale-95"
+              className="rounded-2xl bg-accent px-5 py-3 font-semibold text-on-accent active:scale-95"
             >
               Retry
             </button>

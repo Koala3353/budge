@@ -27,11 +27,11 @@ export default function Welcome({ onSignIn, onCreate, error }) {
     <div className="flex min-h-screen flex-col items-center justify-center px-6">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-matcha text-3xl font-bold text-white shadow-sm">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-accent text-3xl font-bold text-on-accent shadow-sm">
             ₱
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-50">
-            budge<span className="text-matcha">·</span>
+            budge<span className="text-accent-ink">·</span>
           </h1>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
             make it to Friday. No email, no password — just an account key.
@@ -49,7 +49,7 @@ export default function Welcome({ onSignIn, onCreate, error }) {
               onChange={(e) => setKey(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && submitLogin()}
               placeholder="paste your key"
-              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-3 font-mono text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-matcha/40 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-50"
+              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-3 font-mono text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-accent/40 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-50"
             />
             {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
             <button
@@ -57,7 +57,7 @@ export default function Welcome({ onSignIn, onCreate, error }) {
               onClick={submitLogin}
               className={`mt-4 w-full rounded-2xl py-3.5 text-base font-semibold transition ${
                 key.trim() && !busy
-                  ? "bg-matcha text-white active:scale-[0.99]"
+                  ? "bg-accent text-on-accent active:scale-[0.99]"
                   : "cursor-not-allowed bg-gray-200 text-gray-400 dark:bg-gray-800"
               }`}
             >
@@ -75,7 +75,7 @@ export default function Welcome({ onSignIn, onCreate, error }) {
             <button
               disabled={busy}
               onClick={create}
-              className="w-full rounded-2xl bg-matcha py-4 text-base font-semibold text-white transition active:scale-[0.99] disabled:opacity-60"
+              className="w-full rounded-2xl bg-accent py-4 text-base font-semibold text-on-accent transition active:scale-[0.99] disabled:opacity-60"
             >
               {busy ? "Creating…" : "Create new account"}
             </button>

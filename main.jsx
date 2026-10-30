@@ -1,7 +1,9 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App.jsx";
+import "./palettes.css";
 import "./index.css";
+import { syncThemeColor } from "./theme.js";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
@@ -34,3 +36,6 @@ if (import.meta.env.PROD && "serviceWorker" in navigator && location.protocol.st
     });
   });
 }
+
+// The status bar / browser chrome matches the themed page once styles are in.
+requestAnimationFrame(syncThemeColor);

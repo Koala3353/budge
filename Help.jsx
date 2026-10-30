@@ -221,8 +221,10 @@ export default function Help({ onOpenAdmin }) {
           doesn't match how you actually live.
         </p>
         <p>
-          <b>Settings → Appearance</b> picks light, dark, or System (follow your device). It's saved
-          on each device separately, so your phone can stay dark while your laptop is light.
+          <b>Settings → Appearance</b> picks a colour theme (Graphite, Matcha, Pandan, Dagat, Tinta or
+          Ube) and light, dark, or System (follow your device). Both are saved on each device separately.
+          Themes change buttons, tabs and the ring while you're on track; green, amber and red always mean
+          under, close to and over budget.
         </p>
         <Term name="Dashboard detail">
           <b>Simple</b> keeps the ring, what you've spent and where it went. <b>Standard</b> is the

@@ -162,7 +162,7 @@ export default function HistoryChart({ data, symbol }) {
               strokeDasharray="3 4"
             />
             {refLabel && (
-              <text x={VBW} y={refY - 4} textAnchor="end" className="fill-matcha" style={{ fontSize: 9 }}>
+              <text x={VBW} y={refY - 4} textAnchor="end" style={{ fontSize: 9, fill: MATCHA }}>
                 {refLabel}
               </text>
             )}

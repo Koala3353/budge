@@ -94,7 +94,7 @@ export default function EditSheet({
               type="date"
               value={dateStr}
               onChange={(e) => setDateStr(e.target.value)}
-              className="mt-1 w-full min-w-0 rounded-2xl bg-gray-100 px-3 py-3 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-matcha/40 dark:bg-gray-950 dark:text-gray-50 dark:[color-scheme:dark]"
+              className="mt-1 w-full min-w-0 rounded-2xl bg-gray-100 px-3 py-3 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-accent/40 dark:bg-gray-950 dark:text-gray-50 dark:[color-scheme:dark]"
             />
           </div>
           <div className="min-w-0">
@@ -106,7 +106,7 @@ export default function EditSheet({
               type="time"
               value={timeStr}
               onChange={(e) => setTimeStr(e.target.value)}
-              className="mt-1 w-full min-w-0 rounded-2xl bg-gray-100 px-3 py-3 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-matcha/40 dark:bg-gray-950 dark:text-gray-50 dark:[color-scheme:dark]"
+              className="mt-1 w-full min-w-0 rounded-2xl bg-gray-100 px-3 py-3 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-accent/40 dark:bg-gray-950 dark:text-gray-50 dark:[color-scheme:dark]"
             />
           </div>
         </div>
@@ -153,7 +153,7 @@ export default function EditSheet({
           value={note}
           onChange={(e) => setNote(e.target.value)}
           placeholder="Add a note"
-          className="mt-4 w-full rounded-2xl bg-gray-100 px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-matcha/40 dark:bg-gray-950 dark:text-gray-50"
+          className="mt-4 w-full rounded-2xl bg-gray-100 px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-accent/40 dark:bg-gray-950 dark:text-gray-50"
         />
 
         <div className="mt-5 space-y-3">
@@ -162,7 +162,7 @@ export default function EditSheet({
             disabled={!canSave}
             className={`w-full rounded-2xl py-3.5 text-base font-semibold transition ${
               canSave
-                ? "bg-matcha text-white active:scale-[0.99]"
+                ? "bg-accent text-on-accent active:scale-[0.99]"
                 : "cursor-not-allowed bg-gray-200 text-gray-400 dark:bg-gray-800"
             }`}
           >

@@ -67,20 +67,20 @@ export default function QuickAdd({
       {/* Sticky techy status banner -> Dashboard */}
       <div className="glass-bar sticky top-0 z-10 flex items-center justify-between gap-2 px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))]">
         <button onClick={onGoDashboard} className="flex min-w-0 items-center gap-2 text-left text-sm">
-          <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: isOver ? "#EF4444" : "rgb(var(--matcha))" }} />
+          <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: isOver ? "#EF4444" : "rgb(var(--accent-ink))" }} />
           <span className="truncate text-gray-500 dark:text-gray-400">
             {isOver ? "Over budget" : "Left this week"}
           </span>
           <span
             className="font-mono font-semibold tabular-nums"
-            style={{ color: isOver ? "#EF4444" : "rgb(var(--matcha))" }}
+            style={{ color: isOver ? "#EF4444" : "rgb(var(--accent-ink))" }}
           >
             {isOver ? `-${formatMoney(Math.abs(remaining), symbol)}` : formatMoney(remaining, symbol)}
           </span>
         </button>
         <div className="flex shrink-0 items-center gap-3">
           <SyncStatus sync={sync} />
-          <button onClick={onGoDashboard} className="flex items-center gap-1 text-xs font-semibold text-matcha">
+          <button onClick={onGoDashboard} className="flex items-center gap-1 text-xs font-semibold text-accent-ink">
             <ChartIcon size={16} /> Dashboard
           </button>
         </div>
@@ -123,7 +123,7 @@ export default function QuickAdd({
           value={note}
           onChange={(e) => setNote(e.target.value)}
           placeholder="Add a note (e.g. JSEC lunch, Grab to Ateneo)"
-          className="w-full rounded-2xl bg-gray-100 px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-matcha/40 dark:bg-gray-900 dark:text-gray-50"
+          className="w-full rounded-2xl bg-gray-100 px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-accent/40 dark:bg-gray-900 dark:text-gray-50"
         />
       </div>
 
@@ -149,7 +149,7 @@ export default function QuickAdd({
           disabled={!canSave}
           className={`w-full rounded-2xl py-4 text-base font-semibold transition ${
             canSave
-              ? "bg-matcha text-white shadow-float active:scale-[0.98]"
+              ? "bg-accent text-on-accent shadow-float active:scale-[0.98]"
               : "cursor-not-allowed bg-gray-200 text-gray-400 dark:bg-gray-800"
           }`}
         >

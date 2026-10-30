@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 
-// Color thresholds kept local (budget.js is untouched): matcha -> amber -> red.
+// Close and over are money signals and never change with the theme; on track
+// is the app's resting state, so it wears the theme's accent.
 function ringColor(pct, isOver) {
   if (isOver) return "#EF4444"; // danger
   if (pct >= 0.8) return "#F59E0B"; // amber
-  return "#5B8C5A"; // matcha
+  return "rgb(var(--accent))"; // on track: theme accent
 }
 
 /**
@@ -46,13 +47,12 @@ export default function ProgressRing({
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke={color}
           strokeWidth={stroke}
           strokeLinecap="round"
           strokeDasharray={circumference}
           strokeDashoffset={offset}
           className="transition-all duration-700 ease-out"
-          style={{ filter: "drop-shadow(0 3px 8px rgba(0,0,0,0.10))" }}
+          style={{ stroke: color, filter: "drop-shadow(0 3px 8px rgba(0,0,0,0.10))" }}
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center px-8 text-center">

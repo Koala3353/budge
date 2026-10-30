@@ -99,7 +99,7 @@ export default function InstallPrompt() {
     >
       <div className="glass-strong mx-auto max-w-md rounded-3xl p-4">
         <div className="flex items-start gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-matcha text-xl font-bold text-white">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-accent text-xl font-bold text-on-accent">
             ₱
           </div>
           <div className="min-w-0 flex-1">
@@ -116,7 +116,7 @@ export default function InstallPrompt() {
             ) : canPrompt ? (
               <button
                 onClick={install}
-                className="mt-3 w-full rounded-2xl bg-matcha py-2.5 text-sm font-semibold text-white active:scale-[0.99]"
+                className="mt-3 w-full rounded-2xl bg-accent py-2.5 text-sm font-semibold text-on-accent active:scale-[0.99]"
               >
                 Install app
               </button>

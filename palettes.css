@@ -1,0 +1,166 @@
+/* ---------------------------------------------------------------------------
+   Colour themes, generated from Radix Colors scales: each is a neutral ramp +
+   an accent, chosen so every text pairing the app uses passes WCAG AA in light
+   and dark. The ramp feeds Tailwind's gray-50..950; the accent tints
+   interactive things only (buttons, tabs, links, toggles, the on-track ring).
+   Status colours (green under budget, amber close, red over) are never
+   themed: they mean money. Graphite is the default; others are selected by
+   data-palette on <html>, set before first paint (index.html). Keep in sync
+   with palettes.json, which the Settings picker reads.
+   --------------------------------------------------------------------------- */
+/* Graphite */
+:root {
+  --g-50: 249 249 249;
+  --g-100: 240 240 240;
+  --g-200: 224 224 224;
+  --g-300: 206 206 206;
+  --g-400: 141 141 141;
+  --g-500: 100 100 100;
+  --g-600: 66 66 66;
+  --g-700: 58 58 58;
+  --g-800: 42 42 42;
+  --g-900: 30 30 30;
+  --g-950: 17 17 17;
+  --accent: 32 32 32;
+  --accent-press: 0 0 0;
+  --accent-ink: 32 32 32;
+  --on-accent: 255 255 255;
+  --ambient-a: rgba(128, 128, 128, 0.07);
+}
+html.dark {
+  --accent: 238 238 238;
+  --accent-press: 180 180 180;
+  --accent-ink: 238 238 238;
+  --on-accent: 17 17 17;
+  --ambient-a: rgba(128, 128, 128, 0.06);
+}
+/* Matcha */
+html[data-palette="matcha"] {
+  --ambient-a: initial; /* fall back to the accent wash in index.css */
+  --g-50: 242 244 241;
+  --g-100: 233 237 232;
+  --g-200: 223 228 221;
+  --g-300: 198 206 196;
+  --g-400: 140 152 144;
+  --g-500: 92 106 97;
+  --g-600: 71 85 76;
+  --g-700: 44 55 49;
+  --g-800: 31 40 35;
+  --g-900: 20 27 23;
+  --g-950: 10 14 12;
+  --accent: 74 125 77;
+  --accent-press: 61 107 64;
+  --accent-ink: 74 125 77;
+  --on-accent: 255 255 255;
+}
+html.dark[data-palette="matcha"] {
+  --ambient-a: initial; /* fall back to the accent wash in index.css */
+  --accent: 102 153 106;
+  --accent-press: 86 133 90;
+  --accent-ink: 127 178 126;
+  --on-accent: 255 255 255;
+}
+/* Pandan */
+html[data-palette="pandan"] {
+  --ambient-a: initial; /* fall back to the accent wash in index.css */
+  --g-50: 247 249 248;
+  --g-100: 238 241 240;
+  --g-200: 223 226 224;
+  --g-300: 203 207 205;
+  --g-400: 134 142 139;
+  --g-500: 95 101 99;
+  --g-600: 60 67 64;
+  --g-700: 55 59 57;
+  --g-800: 39 42 41;
+  --g-900: 28 30 28;
+  --g-950: 16 18 17;
+  --accent: 32 131 104;
+  --accent-press: 31 106 85;
+  --accent-ink: 32 131 104;
+  --on-accent: 255 255 255;
+}
+html.dark[data-palette="pandan"] {
+  --ambient-a: initial; /* fall back to the accent wash in index.css */
+  --accent: 41 163 131;
+  --accent-press: 42 126 104;
+  --accent-ink: 31 216 164;
+  --on-accent: 16 18 17;
+}
+/* Dagat */
+html[data-palette="dagat"] {
+  --ambient-a: initial; /* fall back to the accent wash in index.css */
+  --g-50: 249 249 251;
+  --g-100: 240 240 243;
+  --g-200: 224 225 230;
+  --g-300: 205 206 214;
+  --g-400: 139 141 152;
+  --g-500: 96 100 108;
+  --g-600: 62 66 72;
+  --g-700: 54 58 63;
+  --g-800: 39 42 45;
+  --g-900: 28 30 32;
+  --g-950: 17 17 19;
+  --accent: 0 133 115;
+  --accent-press: 5 108 94;
+  --accent-ink: 0 133 115;
+  --on-accent: 255 255 255;
+}
+html.dark[data-palette="dagat"] {
+  --ambient-a: initial; /* fall back to the accent wash in index.css */
+  --accent: 18 165 148;
+  --accent-press: 32 126 115;
+  --accent-ink: 11 216 182;
+  --on-accent: 17 17 19;
+}
+/* Tinta */
+html[data-palette="tinta"] {
+  --ambient-a: initial; /* fall back to the accent wash in index.css */
+  --g-50: 249 249 251;
+  --g-100: 240 240 243;
+  --g-200: 224 225 230;
+  --g-300: 205 206 214;
+  --g-400: 139 141 152;
+  --g-500: 96 100 108;
+  --g-600: 62 66 72;
+  --g-700: 54 58 63;
+  --g-800: 39 42 45;
+  --g-900: 28 30 32;
+  --g-950: 17 17 19;
+  --accent: 62 99 221;
+  --accent-press: 62 99 221;
+  --accent-ink: 58 91 199;
+  --on-accent: 255 255 255;
+}
+html.dark[data-palette="tinta"] {
+  --ambient-a: initial; /* fall back to the accent wash in index.css */
+  --accent: 62 99 221;
+  --accent-press: 67 93 177;
+  --accent-ink: 158 177 255;
+  --on-accent: 255 255 255;
+}
+/* Ube */
+html[data-palette="ube"] {
+  --ambient-a: initial; /* fall back to the accent wash in index.css */
+  --g-50: 250 249 251;
+  --g-100: 242 239 243;
+  --g-200: 227 223 230;
+  --g-300: 208 205 215;
+  --g-400: 142 140 153;
+  --g-500: 101 99 109;
+  --g-600: 67 65 74;
+  --g-700: 60 57 63;
+  --g-800: 43 41 45;
+  --g-900: 30 30 32;
+  --g-950: 18 17 19;
+  --accent: 171 74 186;
+  --accent-press: 171 74 186;
+  --accent-ink: 149 62 163;
+  --on-accent: 255 255 255;
+}
+html.dark[data-palette="ube"] {
+  --ambient-a: initial; /* fall back to the accent wash in index.css */
+  --accent: 171 74 186;
+  --accent-press: 146 84 156;
+  --accent-ink: 231 150 243;
+  --on-accent: 255 255 255;
+}

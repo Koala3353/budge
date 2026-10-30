@@ -8,30 +8,25 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Accent as a CSS variable so it can be tuned per mode (index.css) and
-        // still take opacity modifiers like bg-matcha/10.
-        matcha: {
-          DEFAULT: "rgb(var(--matcha) / <alpha-value>)",
-          dark: "rgb(var(--matcha-press) / <alpha-value>)",
-          light: "#7BA87A",
+        // Every themed colour is a CSS variable (palettes.css), written as
+        // channels so opacity modifiers like bg-accent/10 keep working.
+        // accent = the interactive tint (fills); accent-ink = accent used as
+        // text on surfaces; on-accent = text/icons sitting on an accent fill.
+        accent: {
+          DEFAULT: "rgb(var(--accent) / <alpha-value>)",
+          press: "rgb(var(--accent-press) / <alpha-value>)",
+          ink: "rgb(var(--accent-ink) / <alpha-value>)",
         },
+        "on-accent": "rgb(var(--on-accent) / <alpha-value>)",
         over: "#E5484D", // tomato / over-budget red
         caution: "#F5A623", // amber / nearing limit
-        // budge· neutral ramp: sage-tinted, but desaturated from the original so
-        // dark surfaces read as graphite with a hint of green rather than olive.
-        gray: {
-          50: "#F2F4F1", // light page bg / dark primary text
-          100: "#E9EDE8", // light track, segmented bg
-          200: "#DFE4DD", // light border / disabled fill
-          300: "#C6CEC4", // light stronger border
-          400: "#8C9890", // tertiary text (both modes)
-          500: "#5C6A61", // light secondary text
-          600: "#47554C", // light body text
-          700: "#2C3731", // dark input border
-          800: "#1F2823", // dark raised surface / border
-          900: "#141B17", // light primary text / dark card
-          950: "#0A0E0C", // dark page bg
-        },
+        // Neutral ramp, per theme. Same slot meanings in every theme:
+        // 50 light page / dark primary text · 100 tracks · 200-300 borders ·
+        // 400 tertiary text · 500-600 secondary/body text · 700-800 dark borders
+        // and raised surfaces · 900 dark card / light primary text · 950 dark page
+        gray: Object.fromEntries(
+          [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950].map((k) => [k, `rgb(var(--g-${k}) / <alpha-value>)`])
+        ),
       },
       fontFamily: {
         // System first: SF on Apple devices ships optical sizing and tracking
