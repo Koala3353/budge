@@ -2,27 +2,232 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ---------------------------------------------------------------------------
+   Tokens. Light is the default; .dark (set on <html> before first paint)
+   swaps them. Content surfaces stay solid; glass is reserved for the floating
+   layer — tab bar, sticky headers, sheets — so translucency always sits over
+   content, never over more translucency.
+   --------------------------------------------------------------------------- */
+:root {
+  color-scheme: light;
+  --page: #f2f4f1;
+  --matcha: 74 125 77; /* #4A7D4D — passes AA as text on white */
+  --matcha-press: 61 107 64;
+  --ease: cubic-bezier(0.23, 1, 0.32, 1);
+
+  --surface: #ffffff;
+  --hairline: rgba(16, 26, 20, 0.07);
+
+  --glass: rgba(255, 255, 255, 0.62);
+  --glass-strong: rgba(255, 255, 255, 0.82);
+  --glass-edge: rgba(16, 26, 20, 0.08);
+  --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+
+  --shadow-card: 0 1px 2px rgba(16, 26, 20, 0.04), 0 4px 12px rgba(16, 26, 20, 0.04),
+    0 12px 40px rgba(16, 26, 20, 0.05);
+  --shadow-float: 0 1px 2px rgba(16, 26, 20, 0.06), 0 8px 24px rgba(16, 26, 20, 0.08),
+    0 12px 48px rgba(16, 26, 20, 0.08);
+
+  --ambient-a: rgba(91, 140, 90, 0.16);
+  --ambient-b: rgba(245, 166, 35, 0.07);
+
+  /* clearance for the floating tab bar */
+  --nav-clear: calc(5.5rem + env(safe-area-inset-bottom));
+}
+
+.dark {
+  color-scheme: dark;
+  --page: #0a0e0c;
+  --matcha: 102 153 106; /* #66996A — brighter so it reads on graphite */
+  --matcha-press: 86 133 90;
+
+  --surface: #141b17;
+  --hairline: rgba(255, 255, 255, 0.06);
+
+  --glass: rgba(28, 36, 32, 0.55);
+  --glass-strong: rgba(24, 31, 27, 0.8);
+  --glass-edge: rgba(255, 255, 255, 0.1);
+  --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 28px rgba(0, 0, 0, 0.25);
+  --shadow-float: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 30px rgba(0, 0, 0, 0.35),
+    0 18px 56px rgba(0, 0, 0, 0.45);
+
+  --ambient-a: rgba(91, 140, 90, 0.17);
+  --ambient-b: rgba(245, 166, 35, 0.045);
+}
+
 html,
 body,
 #root {
-  height: 100%;
+  min-height: 100%;
 }
 
-/* Page background fills the whole viewport (incl. overscroll / pinch-zoom area)
-   so no white shows through. Follows the system light/dark setting. */
-html {
-  background-color: #f4f7f2; /* budge light page */
+/* The page fills the whole viewport, overscroll included. */
+html,
+body {
+  background-color: var(--page);
 }
 body {
   margin: 0;
-  background-color: #f4f7f2;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  line-height: 1.55;
+  -webkit-tap-highlight-color: transparent;
 }
-@media (prefers-color-scheme: dark) {
-  html,
-  body {
-    background-color: #0a0f0c; /* budge dark page */
+/* A faint, fixed wash of light so the glass has something to refract. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(60rem 36rem at 8% -6%, var(--ambient-a), transparent 60%),
+    radial-gradient(48rem 32rem at 105% 38%, var(--ambient-b), transparent 60%);
+}
+
+/* Type: tight tracking on headings, weight (not size) carries hierarchy. */
+h1 {
+  letter-spacing: -0.5px;
+  line-height: 1.15;
+}
+h2,
+h3 {
+  letter-spacing: -0.3px;
+  line-height: 1.25;
+}
+
+/* Every interactive state moves on the same clock. Exact properties, never
+   `all`. The press itself is quicker so it never lags the finger. */
+button,
+a,
+input,
+select,
+textarea,
+[role="tab"] {
+  transition-property: color, background-color, border-color, box-shadow, transform, opacity;
+  transition-duration: 250ms;
+  transition-timing-function: var(--ease);
+}
+button:active {
+  transition-duration: 120ms;
+}
+
+@layer components {
+  /* Content card: solid, hairline edge, soft layered shadow. */
+  .surface {
+    background-color: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: 1.5rem;
+    box-shadow: var(--shadow-card);
+  }
+
+  /* Floating glass: tab bar, overlays. */
+  .glass {
+    background-color: var(--glass);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    backdrop-filter: blur(24px) saturate(180%);
+    border: 1px solid var(--glass-edge);
+    box-shadow: var(--glass-highlight), var(--shadow-float);
+  }
+  /* Heavier glass for sheets and banners that hold forms and text. */
+  .glass-strong {
+    background-color: var(--glass-strong);
+    -webkit-backdrop-filter: blur(32px) saturate(180%);
+    backdrop-filter: blur(32px) saturate(180%);
+    border: 1px solid var(--glass-edge);
+    box-shadow: var(--glass-highlight), var(--shadow-float);
+  }
+  /* Sticky header bar: glass with a bottom edge, no float shadow. */
+  .glass-bar {
+    background-color: var(--glass);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: blur(20px) saturate(180%);
+    border-bottom: 1px solid var(--glass-edge);
+  }
+}
+
+/* Continuous corners where the browser can draw them (squircle-like). */
+@supports (corner-shape: superellipse(1.5)) {
+  .surface,
+  .glass,
+  .glass-strong,
+  .squircle {
+    corner-shape: superellipse(1.5);
+  }
+}
+
+/* Theme switches ease instead of snapping (theme.js adds this class briefly). */
+html.theme-anim,
+html.theme-anim *,
+html.theme-anim *::before,
+html.theme-anim *::after {
+  transition-property: background-color, border-color, color, fill, stroke, box-shadow !important;
+  transition-duration: 250ms !important;
+  transition-timing-function: var(--ease) !important;
+}
+
+/* Sheets: rise on the iOS drawer curve. */
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes scrim-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.sheet-enter {
+  animation: sheet-up 320ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.scrim-enter {
+  animation: scrim-in 250ms var(--ease);
+}
+
+/* Accessibility: honour the system's motion, transparency and contrast asks. */
+@media (prefers-reduced-motion: reduce) {
+  .sheet-enter {
+    animation: scrim-in 200ms ease;
+  }
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+  }
+  button:active {
+    transform: none !important;
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .glass,
+  .glass-strong,
+  .glass-bar {
+    background-color: var(--surface);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+@media (prefers-contrast: more) {
+  :root {
+    --hairline: rgba(16, 26, 20, 0.25);
+    --glass-edge: rgba(16, 26, 20, 0.35);
+  }
+  .dark {
+    --hairline: rgba(255, 255, 255, 0.25);
+    --glass-edge: rgba(255, 255, 255, 0.35);
+  }
+  .glass,
+  .glass-strong,
+  .glass-bar {
+    background-color: var(--surface);
   }
 }
 

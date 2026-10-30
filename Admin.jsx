@@ -4,7 +4,7 @@ import { fitMoney } from "./ringFormat.js";
 import { loadAdminStats } from "./store.js";
 
 const card =
-  "rounded-3xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm";
+  "surface"; // solid card: hairline edge + soft layered shadow (index.css)
 const MARK = "#5B8C5A"; // matcha: every magnitude on this page is one series
 const PEAK = "#D97706"; // the single highlighted mark in a chart
 const SYM = "₱";
@@ -57,7 +57,7 @@ export default function Admin({ hash, onBack }) {
   }, [hash]);
 
   return (
-    <div className="min-h-full space-y-3 bg-gray-50 px-4 pt-5 pb-4 dark:bg-gray-950">
+    <div className="min-h-full space-y-3 px-4 pt-[calc(1.25rem+env(safe-area-inset-top))] pb-4">
       <header className="mb-1 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <button

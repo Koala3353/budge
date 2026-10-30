@@ -6,7 +6,19 @@
       name="viewport"
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
-    <meta name="theme-color" content="#5B8C5A" />
+    <meta name="theme-color" content="#F2F4F1" />
+    <!-- Apply the saved appearance before first paint, so dark mode never
+         flashes light. Mirrors theme.js. -->
+    <script>
+      (function () {
+        var t = null;
+        try { t = localStorage.getItem("budge.theme"); } catch (e) {}
+        var dark = t === "dark" || (t !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+        if (dark) document.documentElement.classList.add("dark");
+        var m = document.querySelector('meta[name="theme-color"]');
+        if (m) m.setAttribute("content", dark ? "#0A0E0C" : "#F2F4F1");
+      })();
+    </script>
     <!-- The first thing the app does after booting is call Supabase. Warming DNS
          + TLS here takes that handshake off the critical path on mobile. -->
     <link rel="preconnect" href="https://uwmgisvhhzcbcisdlafp.supabase.co" crossorigin />

@@ -61,10 +61,10 @@ export default function EditSheet({
       <button
         aria-label="Close"
         onClick={onClose}
-        className="absolute inset-0 bg-gray-950/40 backdrop-blur-sm"
+        className="scrim-enter absolute inset-0 bg-gray-950/30 backdrop-blur-[2px]"
       />
-      <div className="relative w-full max-w-md animate-[slideUp_200ms_ease-out] rounded-t-3xl border border-gray-200 bg-white p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-2xl dark:border-gray-800 dark:bg-gray-900">
-        <div className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-gray-300 dark:bg-gray-700" />
+      <div className="glass-strong sheet-enter relative w-full max-w-md rounded-t-[1.75rem] border-b-0 p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
+        <div className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-gray-900/15 dark:bg-white/20" />
 
         <h3 className="mb-1 text-base font-bold text-gray-900 dark:text-gray-50">Edit transaction</h3>
 
@@ -184,7 +184,6 @@ export default function EditSheet({
         </div>
       </div>
 
-      <style>{`@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}`}</style>
     </div>
   );
 }

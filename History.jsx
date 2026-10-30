@@ -26,13 +26,13 @@ export default function History({ categories, transactions, settings, onSave, on
   const groups = groupByDay(transactions);
 
   return (
-    <div className="min-h-full bg-gray-50 px-4 pt-5 pb-4 dark:bg-gray-950">
+    <div className="min-h-full px-4 pt-[calc(1.25rem+env(safe-area-inset-top))] pb-4">
       <h1 className="mb-4 text-2xl font-bold tracking-tight text-gray-900 dark:text-gray-50">
         History
       </h1>
 
       {transactions.length === 0 ? (
-        <div className="rounded-3xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500 shadow-sm dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400">
+        <div className="surface p-8 text-center text-sm text-gray-500 dark:text-gray-400">
           No transactions yet. Logged expenses will appear here.
         </div>
       ) : (
@@ -40,10 +40,10 @@ export default function History({ categories, transactions, settings, onSave, on
           {groups.map((g) => (
             <section key={g.label}>
               {/* Sticky date header */}
-              <h2 className="sticky top-0 z-10 -mx-4 mb-2 bg-gray-50/80 px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500 backdrop-blur-md dark:bg-gray-950/80 dark:text-gray-400">
+              <h2 className="glass-bar sticky top-0 z-10 -mx-4 mb-2 px-4 pb-1.5 pt-[calc(0.375rem+env(safe-area-inset-top))] text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                 {g.label}
               </h2>
-              <div className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
+              <div className="surface overflow-hidden">
                 {g.items.map((t, i) => {
                   const c = catById(t.categoryId);
                   return (

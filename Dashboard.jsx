@@ -81,7 +81,7 @@ function shortDay(ts) {
 }
 
 const card =
-  "rounded-3xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm";
+  "surface"; // solid card: hairline edge + soft layered shadow (index.css)
 
 /** The shared range switcher. Categories and Trends read the same selection. */
 function RangeTabs({ mode, setMode }) {
@@ -277,7 +277,7 @@ export default function Dashboard({
   }, [recap, transactions, categories, stk.current]);
 
   return (
-    <div className="min-h-full bg-gray-50 px-4 pt-5 pb-4 dark:bg-gray-950">
+    <div className="min-h-full px-4 pt-[calc(1.25rem+env(safe-area-inset-top))] pb-4">
       <header className="mb-4 flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-gray-50">This Week</h1>
@@ -297,7 +297,7 @@ export default function Dashboard({
       <div
         role="tablist"
         aria-label="Dashboard views"
-        className="mb-4 flex gap-1 rounded-2xl bg-gray-100 p-1 dark:bg-white/5"
+        className="glass sticky top-[calc(env(safe-area-inset-top)+0.5rem)] z-10 mb-4 flex gap-1 rounded-2xl p-1"
       >
         {TABS.map((t) => (
           <button
@@ -307,7 +307,7 @@ export default function Dashboard({
             onClick={() => setTab(t.key)}
             className={`flex-1 rounded-xl py-2 text-sm font-semibold transition ${
               tab === t.key
-                ? "bg-white text-gray-900 shadow-sm dark:bg-gray-800 dark:text-gray-50"
+                ? "bg-white text-gray-900 shadow-sm dark:bg-white/[0.12] dark:text-gray-50"
                 : "text-gray-500 dark:text-gray-400"
             }`}
           >

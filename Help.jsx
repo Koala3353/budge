@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 const card =
-  "rounded-3xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm";
+  "surface"; // solid card: hairline edge + soft layered shadow (index.css)
 
 function Chevron({ open }) {
   return (
@@ -90,7 +90,7 @@ export default function Help({ onOpenAdmin }) {
   const secretTap = useSecretTaps(onOpenAdmin);
 
   return (
-    <div className="min-h-full space-y-3 bg-gray-50 px-4 pt-5 pb-4 dark:bg-gray-950">
+    <div className="min-h-full space-y-3 px-4 pt-[calc(1.25rem+env(safe-area-inset-top))] pb-4">
       <header className="mb-1">
         <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-gray-50">Help</h1>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -219,6 +219,10 @@ export default function Help({ onOpenAdmin }) {
           <b>Settings → Advanced</b> holds the options that change how budge· presents and counts
           things. Every default is the behaviour you already had, so you only need these if something
           doesn't match how you actually live.
+        </p>
+        <p>
+          <b>Settings → Appearance</b> picks light, dark, or System (follow your device). It's saved
+          on each device separately, so your phone can stay dark while your laptop is light.
         </p>
         <Term name="Dashboard detail">
           <b>Simple</b> keeps the ring, what you've spent and where it went. <b>Standard</b> is the

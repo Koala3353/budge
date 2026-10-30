@@ -2,6 +2,7 @@ import { useState } from "react";
 import { parseAmount } from "./budget.js";
 import CategoryEditor from "./CategoryEditor.jsx";
 import Modal from "./Modal.jsx";
+import { getTheme, setTheme } from "./theme.js";
 
 const WEEK_DAYS = [
   { value: 0, label: "Sunday" },
@@ -14,6 +15,12 @@ const SYNC_LABEL = {
   error: { text: "Offline — will retry", color: "text-red-500" },
   idle: { text: "", color: "text-gray-400" },
 };
+
+const APPEARANCE = [
+  { value: "system", label: "System" },
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+];
 
 const DETAIL_LEVELS = [
   { value: "simple", label: "Simple", hint: "Just the ring, what you've spent, and where it went." },
@@ -36,7 +43,7 @@ const DEFAULT_RANGES = [
 ];
 
 const card =
-  "rounded-3xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm";
+  "surface"; // solid card: hairline edge + soft layered shadow (index.css)
 const input =
   "w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-3 text-gray-900 dark:text-gray-50 focus:outline-none focus:ring-2 focus:ring-matcha/40";
 
@@ -97,7 +104,7 @@ export default function Settings({
   const syncInfo = SYNC_LABEL[sync] || SYNC_LABEL.idle;
 
   return (
-    <div className="min-h-full space-y-6 bg-gray-50 px-4 pt-5 pb-4 dark:bg-gray-950">
+    <div className="min-h-full space-y-6 px-4 pt-[calc(1.25rem+env(safe-area-inset-top))] pb-4">
       <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-gray-50">Settings</h1>
 
       <Section title="Account">
@@ -239,6 +246,10 @@ export default function Settings({
         >
           + Add category
         </button>
+      </Section>
+
+      <Section title="Appearance">
+        <Appearance />
       </Section>
 
       <Section title="Advanced">
@@ -457,6 +468,39 @@ export default function Settings({
           </div>
         </Modal>
       )}
+    </div>
+  );
+}
+
+/** Per-device theme. Not synced: your phone can be dark while your laptop isn't. */
+function Appearance() {
+  const [theme, setLocal] = useState(getTheme);
+  function choose(v) {
+    setLocal(v);
+    setTheme(v);
+  }
+  return (
+    <div className={`${card} p-4`}>
+      <div role="radiogroup" aria-label="Appearance" className="flex gap-1 rounded-2xl bg-gray-100 p-1 dark:bg-white/5">
+        {APPEARANCE.map((a) => (
+          <button
+            key={a.value}
+            role="radio"
+            aria-checked={theme === a.value}
+            onClick={() => choose(a.value)}
+            className={`flex-1 rounded-xl py-2 text-xs font-semibold ${
+              theme === a.value
+                ? "bg-white text-gray-900 shadow-sm dark:bg-white/[0.12] dark:text-gray-50"
+                : "text-gray-500 dark:text-gray-400"
+            }`}
+          >
+            {a.label}
+          </button>
+        ))}
+      </div>
+      <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+        {theme === "system" ? "Follows your device's light or dark setting." : "Set for this device only."}
+      </p>
     </div>
   );
 }

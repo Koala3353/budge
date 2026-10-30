@@ -9,15 +9,33 @@ const TABS = [
   { key: "help", label: "Help", Icon: HelpIcon },
 ];
 
-/** Fixed bottom tab bar. The Add tab is visually emphasized (centered FAB-style). */
+/**
+ * Floating glass tab bar. A pill that hovers above the content (which scrolls
+ * underneath and shows through the blur), clear of the home indicator. The
+ * active tab is marked by a capsule that slides between slots on a transform,
+ * so moving between tabs reads as one object travelling, not two lighting up.
+ */
 export default function BottomNav({ view, onChange }) {
+  const index = TABS.findIndex((t) => t.key === view);
+  const onAdd = TABS[index]?.emphasized;
+
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-20 border-t border-gray-200 dark:border-gray-800
-                 bg-white/80 dark:bg-gray-950/80 backdrop-blur-md
-                 pb-[env(safe-area-inset-bottom)]"
+      aria-label="Main"
+      className="pointer-events-none fixed inset-x-0 bottom-0 z-20 flex justify-center px-4
+                 pb-[calc(0.75rem+env(safe-area-inset-bottom))]"
     >
-      <div className="mx-auto flex max-w-md items-stretch justify-around">
+      <div className="glass pointer-events-auto relative flex w-full max-w-[26rem] items-stretch rounded-full p-1.5">
+        {/* Sliding active capsule: one slot wide, moved by transform only. */}
+        <span
+          aria-hidden="true"
+          className="absolute inset-y-1.5 left-1.5 rounded-full bg-gray-900/[0.06] transition-[transform,opacity] duration-[250ms] ease-out dark:bg-white/10"
+          style={{
+            width: "calc((100% - 0.75rem) / 5)",
+            transform: `translateX(${Math.max(index, 0) * 100}%)`,
+            opacity: index < 0 || onAdd ? 0 : 1,
+          }}
+        />
         {TABS.map(({ key, label, Icon, emphasized }) => {
           const active = view === key;
           if (emphasized) {
@@ -26,13 +44,14 @@ export default function BottomNav({ view, onChange }) {
                 key={key}
                 onClick={() => onChange(key)}
                 aria-label={label}
-                className="flex flex-col items-center justify-center px-3 -mt-5"
+                aria-current={active ? "page" : undefined}
+                className="relative flex flex-1 items-center justify-center"
               >
                 <span
-                  className={`flex h-14 w-14 items-center justify-center rounded-full text-white shadow-lg
-                    ${active ? "bg-matcha-dark" : "bg-matcha"} active:scale-95 transition`}
+                  className={`flex h-12 w-12 items-center justify-center rounded-full text-white shadow-float
+                    active:scale-95 ${active ? "bg-matcha-dark" : "bg-matcha"}`}
                 >
-                  <Icon size={28} />
+                  <Icon size={26} />
                 </span>
               </button>
             );
@@ -41,12 +60,12 @@ export default function BottomNav({ view, onChange }) {
             <button
               key={key}
               onClick={() => onChange(key)}
-              aria-label={label}
-              className={`flex min-h-[56px] flex-1 flex-col items-center justify-center gap-0.5 py-2
-                ${active ? "text-matcha" : "text-gray-400 dark:text-gray-500"}`}
+              aria-current={active ? "page" : undefined}
+              className={`relative flex min-h-[52px] flex-1 flex-col items-center justify-center gap-0.5 rounded-full active:scale-95
+                ${active ? "text-matcha" : "text-gray-500 dark:text-gray-400"}`}
             >
-              <Icon size={24} />
-              <span className="text-[11px] font-medium">{label}</span>
+              <Icon size={22} />
+              <span className={`text-[10px] leading-none ${active ? "font-semibold" : "font-medium"}`}>{label}</span>
             </button>
           );
         })}

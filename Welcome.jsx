@@ -24,7 +24,7 @@ export default function Welcome({ onSignIn, onCreate, error }) {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 px-6 dark:bg-gray-950">
+    <div className="flex min-h-screen flex-col items-center justify-center px-6">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-matcha text-3xl font-bold text-white shadow-sm">
@@ -39,7 +39,7 @@ export default function Welcome({ onSignIn, onCreate, error }) {
         </div>
 
         {mode === "login" ? (
-          <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+          <div className="surface p-5">
             <label className="mb-1 block text-sm font-medium text-gray-600 dark:text-gray-300">
               Account key
             </label>

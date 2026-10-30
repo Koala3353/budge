@@ -93,11 +93,11 @@ export default function InstallPrompt() {
   return (
     <div
       className="fixed inset-x-0 z-30 px-4"
-      style={{ bottom: "calc(6rem + env(safe-area-inset-bottom))" }}
+      style={{ bottom: "calc(var(--nav-clear) + 0.25rem)" }}
       role="dialog"
       aria-label="Install budge"
     >
-      <div className="mx-auto max-w-md rounded-3xl border border-gray-200 bg-white p-4 shadow-2xl dark:border-gray-800 dark:bg-gray-900">
+      <div className="glass-strong mx-auto max-w-md rounded-3xl p-4">
         <div className="flex items-start gap-3">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-matcha text-xl font-bold text-white">
             ₱

@@ -56,7 +56,7 @@ function prefetchScreens() {
 if (getStoredHash()) prefetchScreens();
 
 const Spinner = () => (
-  <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-950">
+  <div className="flex min-h-screen items-center justify-center">
     <div className="h-8 w-8 animate-spin rounded-full border-2 border-matcha border-t-transparent" />
   </div>
 );
@@ -600,7 +600,7 @@ export default function App() {
   }
   if (status !== "ready") {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-6 text-center dark:bg-gray-950">
+      <div className="flex min-h-screen items-center justify-center px-6 text-center">
         {status === "loading" ? (
           <div className="flex flex-col items-center gap-3 text-gray-500 dark:text-gray-400">
             <div className="h-8 w-8 animate-spin rounded-full border-2 border-matcha border-t-transparent" />
@@ -625,8 +625,8 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-full bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-50">
-      <div className="mx-auto flex min-h-screen max-w-md flex-col pb-24">
+    <div className="min-h-full text-gray-900 dark:text-gray-50">
+      <div className="mx-auto flex min-h-screen max-w-md flex-col pb-[var(--nav-clear)]">
         <Suspense fallback={<Spinner />}>
         {view === "add" && (
           <QuickAdd

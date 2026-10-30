@@ -63,17 +63,17 @@ export default function QuickAdd({
   }
 
   return (
-    <div className="flex min-h-full flex-col bg-gray-50 dark:bg-gray-950">
+    <div className="flex min-h-full flex-col">
       {/* Sticky techy status banner -> Dashboard */}
-      <div className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-gray-200/70 bg-white/80 px-4 py-3 backdrop-blur-md dark:border-gray-800/70 dark:bg-gray-950/80">
+      <div className="glass-bar sticky top-0 z-10 flex items-center justify-between gap-2 px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))]">
         <button onClick={onGoDashboard} className="flex min-w-0 items-center gap-2 text-left text-sm">
-          <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: isOver ? "#EF4444" : "#5B8C5A" }} />
+          <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: isOver ? "#EF4444" : "rgb(var(--matcha))" }} />
           <span className="truncate text-gray-500 dark:text-gray-400">
             {isOver ? "Over budget" : "Left this week"}
           </span>
           <span
             className="font-mono font-semibold tabular-nums"
-            style={{ color: isOver ? "#EF4444" : "#5B8C5A" }}
+            style={{ color: isOver ? "#EF4444" : "rgb(var(--matcha))" }}
           >
             {isOver ? `-${formatMoney(Math.abs(remaining), symbol)}` : formatMoney(remaining, symbol)}
           </span>
@@ -143,13 +143,13 @@ export default function QuickAdd({
       </div>
 
       {/* Sticky save */}
-      <div className="sticky bottom-0 mt-auto bg-gradient-to-t from-gray-50 px-4 pb-4 pt-3 dark:from-gray-950">
+      <div className="sticky bottom-[calc(var(--nav-clear)-1rem)] mt-auto px-4 pb-4 pt-3">
         <button
           onClick={save}
           disabled={!canSave}
           className={`w-full rounded-2xl py-4 text-base font-semibold transition ${
             canSave
-              ? "bg-matcha text-white active:scale-[0.99]"
+              ? "bg-matcha text-white shadow-float active:scale-[0.98]"
               : "cursor-not-allowed bg-gray-200 text-gray-400 dark:bg-gray-800"
           }`}
         >
