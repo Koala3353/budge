@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   parseAmount,
   formatMoney,
@@ -12,6 +12,24 @@ import { ChartIcon } from "./icons.jsx";
 import SyncStatus from "./SyncStatus.jsx";
 
 const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "⌫"];
+
+// Short screens (the same cutoff the layout tightens at) put the categories in
+// one horizontally scrolling row, so the keypad keeps its room. Tall screens
+// have space for every chip at once and keep the wrapped grid.
+const SHORT = "(max-height: 780px)";
+const DAY = 86400000;
+
+function useMedia(query) {
+  const [match, setMatch] = useState(() => typeof window !== "undefined" && window.matchMedia(query).matches);
+  useEffect(() => {
+    const m = window.matchMedia(query);
+    const on = () => setMatch(m.matches);
+    on();
+    m.addEventListener("change", on);
+    return () => m.removeEventListener("change", on);
+  }, [query]);
+  return match;
+}
 
 /**
  * Quick-Add — the default landing screen, built for one-handed speed.
@@ -32,6 +50,56 @@ export default function QuickAdd({
   const [amountStr, setAmountStr] = useState("");
   const [categoryId, setCategoryId] = useState(null);
   const [note, setNote] = useState("");
+
+  const scrollRow = useMedia(SHORT);
+  const rowRef = useRef(null);
+  const [edges, setEdges] = useState({ left: false, right: false });
+
+  // In the scrolling row, the categories you actually use come first, so they're
+  // on screen without scrolling: count over the last 30 days, ties keep your own
+  // order. The wrapped grid shows everything, so it keeps your order exactly.
+  const ordered = useMemo(() => {
+    if (!scrollRow) return categories;
+    const since = Date.now() - 30 * DAY;
+    const uses = {};
+    for (const t of transactions) if (t.ts >= since) uses[t.categoryId] = (uses[t.categoryId] || 0) + 1;
+    return categories
+      .map((c, i) => ({ c, i, n: uses[c.id] || 0 }))
+      .sort((a, b) => b.n - a.n || a.i - b.i)
+      .map((x) => x.c);
+  }, [scrollRow, categories, transactions]);
+
+  // Fade an edge only while there are chips hidden past it.
+  function measureEdges() {
+    const el = rowRef.current;
+    if (!el || !scrollRow) return setEdges({ left: false, right: false });
+    setEdges({ left: el.scrollLeft > 2, right: el.scrollLeft + el.clientWidth < el.scrollWidth - 2 });
+  }
+  useEffect(() => {
+    measureEdges();
+    const el = rowRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(measureEdges);
+    ro.observe(el);
+    return () => ro.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scrollRow, ordered.length]);
+
+  function pickCategory(id, el) {
+    setCategoryId(id);
+    // keep the chosen chip fully in view (horizontal only; never moves the page)
+    const row = rowRef.current;
+    if (scrollRow && row && el) {
+      const pad = 16;
+      const l = el.offsetLeft - pad, r = el.offsetLeft + el.offsetWidth + pad - row.clientWidth;
+      if (row.scrollLeft > l) row.scrollTo({ left: l, behavior: "smooth" });
+      else if (row.scrollLeft < r) row.scrollTo({ left: r, behavior: "smooth" });
+    }
+  }
+
+  const fade = scrollRow
+    ? `linear-gradient(to right, ${edges.left ? "transparent 0, #000 28px" : "#000 0"}, ${edges.right ? "#000 calc(100% - 36px), transparent 100%" : "#000 100%"})`
+    : undefined;
 
   const cents = parseAmount(amountStr);
   const canSave = cents > 0 && categoryId != null;
@@ -101,14 +169,23 @@ export default function QuickAdd({
 
       {/* Category chips */}
       <div className="px-4 pt-[clamp(0.5rem,2dvh,1rem)] [@media(max-height:780px)]:pt-2">
-        <div className="flex flex-wrap gap-2">
-          {categories.map((c) => {
+        <div
+          ref={rowRef}
+          onScroll={measureEdges}
+          className={
+            scrollRow
+              ? "no-scrollbar relative -mx-4 flex gap-2 overflow-x-auto overscroll-x-contain px-4"
+              : "flex flex-wrap gap-2"
+          }
+          style={fade ? { WebkitMaskImage: fade, maskImage: fade } : undefined}
+        >
+          {ordered.map((c) => {
             const active = categoryId === c.id;
             return (
               <button
                 key={c.id}
-                onClick={() => setCategoryId(c.id)}
-                className={`min-h-[44px] rounded-full px-[clamp(0.7rem,3.4vw,1rem)] py-2 text-sm font-medium transition active:scale-95 ${
+                onClick={(e) => pickCategory(c.id, e.currentTarget)}
+                className={`min-h-[44px] shrink-0 whitespace-nowrap rounded-full px-[clamp(0.7rem,3.4vw,1rem)] py-2 text-sm font-medium transition active:scale-95 ${
                   active
                     ? "border border-transparent text-white"
                     : "border border-gray-300 text-gray-700 dark:border-gray-700 dark:text-gray-200"
@@ -134,7 +211,7 @@ export default function QuickAdd({
 
       {/* Borderless numpad: rows flex between a 44px touch target and 64px */}
       <div
-        className="mt-auto grid max-h-[18.75rem] flex-1 grid-cols-3 gap-2 px-4 pt-[clamp(0.5rem,2.5dvh,1.25rem)] [@media(max-height:780px)]:pt-2"
+        className="mt-auto grid max-h-[18.75rem] flex-1 grid-cols-3 gap-2 px-4 [@media(max-height:600px)]:gap-1.5 pt-[clamp(0.5rem,2.5dvh,1.25rem)] [@media(max-height:780px)]:pt-2"
         style={{ gridAutoRows: "minmax(44px, 1fr)" }}
       >
           {KEYS.map((k) => (
