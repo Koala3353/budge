@@ -62,8 +62,13 @@ export default function QuickAdd({
     setNote("");
   }
 
+  // The log screen fills the space above the floating tab bar, and the keypad
+  // takes whatever is left: its rows share that space (never under a 44px touch
+  // target, keys capped at 64px), so on most phones every key and Save are on
+  // screen at once without scrolling. If even 44px rows don't fit, the screen
+  // grows and scrolls instead of letting anything overlap.
   return (
-    <div className="flex min-h-full flex-col">
+    <div className="flex min-h-[calc(100dvh-var(--nav-clear))] flex-col">
       {/* Sticky techy status banner -> Dashboard */}
       <div className="glass-bar sticky top-0 z-10 flex items-center justify-between gap-2 px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))]">
         <button onClick={onGoDashboard} className="flex min-w-0 items-center gap-2 text-left text-sm">
@@ -87,15 +92,15 @@ export default function QuickAdd({
       </div>
 
       {/* Amount readout */}
-      <div className="px-4 pt-8 pb-2 text-center">
+      <div className="px-4 pb-2 pt-[clamp(0.75rem,3.5dvh,2rem)] text-center [@media(max-height:780px)]:pb-1 [@media(max-height:780px)]:pt-2">
         <div className="text-xs font-medium uppercase tracking-wide text-gray-400">Amount</div>
-        <div className="mt-1 text-6xl font-extrabold tracking-tight text-gray-900 dark:text-gray-50">
+        <div className="mt-1 text-[clamp(2.75rem,8dvh,3.75rem)] font-extrabold leading-tight tracking-tight [@media(max-height:780px)]:mt-0 [@media(max-height:780px)]:text-5xl text-gray-900 dark:text-gray-50">
           {amountStr === "" ? `${symbol}0` : formatMoney(cents, symbol)}
         </div>
       </div>
 
       {/* Category chips */}
-      <div className="px-4 pt-4">
+      <div className="px-4 pt-[clamp(0.5rem,2dvh,1rem)] [@media(max-height:780px)]:pt-2">
         <div className="flex flex-wrap gap-2">
           {categories.map((c) => {
             const active = categoryId === c.id;
@@ -103,7 +108,7 @@ export default function QuickAdd({
               <button
                 key={c.id}
                 onClick={() => setCategoryId(c.id)}
-                className={`min-h-[44px] rounded-full px-4 py-2 text-sm font-medium transition active:scale-95 ${
+                className={`min-h-[44px] rounded-full px-[clamp(0.7rem,3.4vw,1rem)] py-2 text-sm font-medium transition active:scale-95 ${
                   active
                     ? "border border-transparent text-white"
                     : "border border-gray-300 text-gray-700 dark:border-gray-700 dark:text-gray-200"
@@ -118,36 +123,37 @@ export default function QuickAdd({
       </div>
 
       {/* Borderless note */}
-      <div className="px-4 pt-4">
+      <div className="px-4 pt-[clamp(0.5rem,2dvh,1rem)] [@media(max-height:780px)]:pt-2">
         <input
           value={note}
           onChange={(e) => setNote(e.target.value)}
           placeholder="Add a note (e.g. JSEC lunch, Grab to Ateneo)"
-          className="w-full rounded-2xl bg-gray-100 px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-accent/40 dark:bg-gray-900 dark:text-gray-50"
+          className="w-full rounded-2xl bg-gray-100 px-4 py-3 text-sm text-gray-900 placeholder-gray-400 [@media(max-height:780px)]:py-2.5 focus:outline-none focus:ring-2 focus:ring-accent/40 dark:bg-gray-900 dark:text-gray-50"
         />
       </div>
 
-      {/* Borderless numpad */}
-      <div className="px-4 pt-5">
-        <div className="grid grid-cols-3 gap-2">
+      {/* Borderless numpad: rows flex between a 44px touch target and 64px */}
+      <div
+        className="mt-auto grid max-h-[18.75rem] flex-1 grid-cols-3 gap-2 px-4 pt-[clamp(0.5rem,2.5dvh,1.25rem)] [@media(max-height:780px)]:pt-2"
+        style={{ gridAutoRows: "minmax(44px, 1fr)" }}
+      >
           {KEYS.map((k) => (
             <button
               key={k}
               onClick={() => press(k)}
-              className="h-16 rounded-2xl text-2xl font-semibold text-gray-900 transition active:scale-95 active:bg-gray-200 dark:text-gray-50 dark:active:bg-gray-800"
+              className="h-full max-h-16 self-end rounded-2xl text-2xl font-semibold text-gray-900 transition active:scale-95 active:bg-gray-200 dark:text-gray-50 dark:active:bg-gray-800"
             >
               {k}
             </button>
           ))}
-        </div>
       </div>
 
-      {/* Sticky save */}
-      <div className="sticky bottom-[calc(var(--nav-clear)-1rem)] mt-auto px-4 pb-4 pt-3">
+      {/* Save: always directly under the keypad, never over it */}
+      <div className="shrink-0 px-4 pb-2 pt-2.5">
         <button
           onClick={save}
           disabled={!canSave}
-          className={`w-full rounded-2xl py-4 text-base font-semibold transition ${
+          className={`w-full rounded-2xl py-4 text-base font-semibold transition [@media(max-height:780px)]:py-3.5 ${
             canSave
               ? "bg-accent text-on-accent shadow-float active:scale-[0.98]"
               : "cursor-not-allowed bg-gray-200 text-gray-400 dark:bg-gray-800"
