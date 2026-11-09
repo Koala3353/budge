@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   parseAmount,
   formatMoney,
@@ -13,23 +13,12 @@ import SyncStatus from "./SyncStatus.jsx";
 
 const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "⌫"];
 
-// Short screens (the same cutoff the layout tightens at) put the categories in
-// one horizontally scrolling row, so the keypad keeps its room. Tall screens
-// have space for every chip at once and keep the wrapped grid.
-const SHORT = "(max-height: 780px)";
+// Categories wrap onto as many rows as they need when the screen has the room.
+// When they can't all fit without squeezing the keypad below COMFY_KEY, they
+// scroll sideways instead, in as many rows as the space allows (often two), so
+// no screen is left with an empty band. Decided by measuring, not a breakpoint.
+const COMFY_KEY = 56; // px; full-size keys are 64
 const DAY = 86400000;
-
-function useMedia(query) {
-  const [match, setMatch] = useState(() => typeof window !== "undefined" && window.matchMedia(query).matches);
-  useEffect(() => {
-    const m = window.matchMedia(query);
-    const on = () => setMatch(m.matches);
-    on();
-    m.addEventListener("change", on);
-    return () => m.removeEventListener("change", on);
-  }, [query]);
-  return match;
-}
 
 /**
  * Quick-Add — the default landing screen, built for one-handed speed.
@@ -51,8 +40,18 @@ export default function QuickAdd({
   const [categoryId, setCategoryId] = useState(null);
   const [note, setNote] = useState("");
 
-  const scrollRow = useMedia(SHORT);
+  // First guess before measuring: scroll on short screens. The layout effect
+  // below corrects it before the first paint, so there's no visible jump.
+  const [chipLayout, setChipLayout] = useState(() => ({
+    scroll: typeof window !== "undefined" && window.innerHeight <= 780,
+    rows: 1,
+  }));
+  const scrollRow = chipLayout.scroll;
   const rowRef = useRef(null);
+  const wrapRef = useRef(null);
+  const noteRef = useRef(null);
+  const gridRef = useRef(null);
+  const saveRef = useRef(null);
   const [edges, setEdges] = useState({ left: false, right: false });
 
   // In the scrolling row, the categories you actually use come first, so they're
@@ -68,6 +67,54 @@ export default function QuickAdd({
       .sort((a, b) => b.n - a.n || a.i - b.i)
       .map((x) => x.c);
   }, [scrollRow, categories, transactions]);
+
+  // Wrap or scroll? Work out how many rows the chips would need wrapped (from
+  // their real widths), how much the keypad would shrink to make room, and keep
+  // the wrapped grid only if keys stay comfortable. The sum is done in
+  // "scroll-row terms" whichever mode is showing, so the answer can't flip-flop.
+  function decideLayout() {
+    const row = rowRef.current, wrap = wrapRef.current, noteEl = noteRef.current;
+    const grid = gridRef.current, saveEl = saveRef.current;
+    if (!row || !wrap || !noteEl || !grid || !saveEl) return;
+    const chips = [...row.querySelectorAll("[data-id]")];
+    if (!chips.length) return;
+    const width = {};
+    for (const c of chips) width[c.dataset.id] = c.offsetWidth;
+    const chipH = chips[0].offsetHeight;
+    const gap = 8;
+    const avail = wrap.clientWidth - 32; // the px-4 gutter on each side
+    let rows = 1, line = 0;
+    for (const c of categories) {
+      const w = width[c.id] || 0;
+      if (line && line + gap + w > avail) { rows++; line = w; } else line += (line ? gap : 0) + w;
+    }
+    const perRow = chipH + gap;
+    const space = saveEl.getBoundingClientRect().top - noteEl.getBoundingClientRect().bottom;
+    // normalise to "one chip row" whatever is showing, so the answer is stable
+    const shownRows = scrollRow ? chipLayout.rows : rows;
+    const base = space + (shownRows - 1) * perRow;
+    const cs = getComputedStyle(grid);
+    const keyWith = (r) => (base - (r - 1) * perRow - parseFloat(cs.paddingTop) - 3 * parseFloat(cs.rowGap)) / 4;
+    let fit = 1; // how many chip rows the keypad can spare room for
+    while (fit < rows && keyWith(fit + 1) >= COMFY_KEY) fit++;
+    const next = rows <= fit ? { scroll: false, rows } : { scroll: true, rows: fit };
+    if (next.scroll !== chipLayout.scroll || (next.scroll && next.rows !== chipLayout.rows)) setChipLayout(next);
+  }
+  useLayoutEffect(() => {
+    decideLayout();
+    window.addEventListener("resize", decideLayout);
+    return () => window.removeEventListener("resize", decideLayout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chipLayout, categories]);
+
+  // Scrolling rows: deal the chips column by column (1st to row 1, 2nd to row 2,
+  // ...), so the most-used ones are all at the visible left edge.
+  const scrollRows = useMemo(() => {
+    const n = Math.max(1, chipLayout.rows);
+    const out = Array.from({ length: n }, () => []);
+    ordered.forEach((c, i) => out[i % n].push(c));
+    return out;
+  }, [ordered, chipLayout.rows]);
 
   // Fade an edge only while there are chips hidden past it.
   function measureEdges() {
@@ -168,22 +215,25 @@ export default function QuickAdd({
       </div>
 
       {/* Category chips */}
-      <div className="px-4 pt-[clamp(0.5rem,2dvh,1rem)] [@media(max-height:780px)]:pt-2">
+      <div ref={wrapRef} className="px-4 pt-[clamp(0.5rem,2dvh,1rem)] [@media(max-height:780px)]:pt-2">
         <div
           ref={rowRef}
           onScroll={measureEdges}
           className={
             scrollRow
-              ? "no-scrollbar relative -mx-4 flex gap-2 overflow-x-auto overscroll-x-contain px-4"
+              ? "no-scrollbar relative -mx-4 flex flex-col gap-2 overflow-x-auto overscroll-x-contain px-4"
               : "flex flex-wrap gap-2"
           }
           style={fade ? { WebkitMaskImage: fade, maskImage: fade } : undefined}
         >
-          {ordered.map((c) => {
+          {(scrollRow ? scrollRows : [ordered]).map((rowChips, ri) => (
+            <div key={ri} className={scrollRow ? "flex w-max gap-2" : "contents"}>
+          {rowChips.map((c) => {
             const active = categoryId === c.id;
             return (
               <button
                 key={c.id}
+                data-id={c.id}
                 onClick={(e) => pickCategory(c.id, e.currentTarget)}
                 className={`min-h-[44px] shrink-0 whitespace-nowrap rounded-full px-[clamp(0.7rem,3.4vw,1rem)] py-2 text-sm font-medium transition active:scale-95 ${
                   active
@@ -196,12 +246,15 @@ export default function QuickAdd({
               </button>
             );
           })}
+            </div>
+          ))}
         </div>
       </div>
 
       {/* Borderless note */}
       <div className="px-4 pt-[clamp(0.5rem,2dvh,1rem)] [@media(max-height:780px)]:pt-2">
         <input
+          ref={noteRef}
           value={note}
           onChange={(e) => setNote(e.target.value)}
           placeholder="Add a note (e.g. JSEC lunch, Grab to Ateneo)"
@@ -211,6 +264,7 @@ export default function QuickAdd({
 
       {/* Borderless numpad: rows flex between a 44px touch target and 64px */}
       <div
+        ref={gridRef}
         className="mt-auto grid max-h-[18.75rem] flex-1 grid-cols-3 gap-2 px-4 [@media(max-height:600px)]:gap-1.5 pt-[clamp(0.5rem,2.5dvh,1.25rem)] [@media(max-height:780px)]:pt-2"
         style={{ gridAutoRows: "minmax(44px, 1fr)" }}
       >
@@ -226,7 +280,7 @@ export default function QuickAdd({
       </div>
 
       {/* Save: always directly under the keypad, never over it */}
-      <div className="shrink-0 px-4 pb-2 pt-2.5">
+      <div ref={saveRef} className="shrink-0 px-4 pb-2 pt-2.5">
         <button
           onClick={save}
           disabled={!canSave}
