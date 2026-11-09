@@ -47,6 +47,8 @@ export default function QuickAdd({
     rows: 1,
   }));
   const scrollRow = chipLayout.scroll;
+  const rootRef = useRef(null);
+  const [fitH, setFitH] = useState(null);
   const rowRef = useRef(null);
   const wrapRef = useRef(null);
   const noteRef = useRef(null);
@@ -67,6 +69,32 @@ export default function QuickAdd({
       .sort((a, b) => b.n - a.n || a.i - b.i)
       .map((x) => x.c);
   }, [scrollRow, categories, transactions]);
+
+  // Size the screen to end just above the tab bar, measured from where the tab
+  // bar actually is. 100dvh alone isn't trustworthy: on some Android installed
+  // apps it counts the system navigation bar, which pushed Save under the tab
+  // bar and left a band of empty space above the keypad. The CSS min-height
+  // stays as the first-paint fallback; this measured value replaces it.
+  function fitToTabBar() {
+    const root = rootRef.current;
+    const bar = document.querySelector('nav[aria-label="Main"] > div');
+    if (!root || !bar) return;
+    // the note's keyboard can shrink the viewport on some phones; don't reflow under the user's thumbs
+    if (document.activeElement === noteRef.current) return;
+    const top = root.getBoundingClientRect().top + window.scrollY;
+    const h = Math.floor(bar.getBoundingClientRect().top - top - 12);
+    if (h > 0) setFitH((prev) => (prev != null && Math.abs(prev - h) < 2 ? prev : h));
+  }
+  useLayoutEffect(() => {
+    fitToTabBar();
+    window.addEventListener("resize", fitToTabBar);
+    window.addEventListener("orientationchange", fitToTabBar);
+    return () => {
+      window.removeEventListener("resize", fitToTabBar);
+      window.removeEventListener("orientationchange", fitToTabBar);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Wrap or scroll? Work out how many rows the chips would need wrapped (from
   // their real widths), how much the keypad would shrink to make room, and keep
@@ -105,7 +133,7 @@ export default function QuickAdd({
     window.addEventListener("resize", decideLayout);
     return () => window.removeEventListener("resize", decideLayout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chipLayout, categories]);
+  }, [chipLayout, categories, fitH]);
 
   // Scrolling rows: deal the chips column by column (1st to row 1, 2nd to row 2,
   // ...), so the most-used ones are all at the visible left edge.
@@ -183,7 +211,11 @@ export default function QuickAdd({
   // screen at once without scrolling. If even 44px rows don't fit, the screen
   // grows and scrolls instead of letting anything overlap.
   return (
-    <div className="flex min-h-[calc(100dvh-var(--nav-clear))] flex-col">
+    <div
+      ref={rootRef}
+      className="flex min-h-[calc(100dvh-var(--nav-clear))] flex-col"
+      style={fitH != null ? { minHeight: fitH } : undefined}
+    >
       {/* Sticky techy status banner -> Dashboard */}
       <div className="glass-bar sticky top-0 z-10 flex items-center justify-between gap-2 px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))]">
         <button onClick={onGoDashboard} className="flex min-w-0 items-center gap-2 text-left text-sm">
